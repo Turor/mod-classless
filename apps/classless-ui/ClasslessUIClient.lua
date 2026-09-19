@@ -107,6 +107,45 @@ local function createTabButton(name, parent, w, h)
     return btn
 end
 
+-- Stock talent BGs are one 256x256 painting (TopLeft) plus a 44px right
+-- strip and 75px bottom strip. SetTexture resets a Texture to native size
+-- on 3.3.5, so we must SetWidth/SetHeight after every texture change.
+local TALENT_ART_TL_W, TALENT_ART_TL_H = 256, 256
+local TALENT_ART_TR_W, TALENT_ART_BL_H = 44, 75
+local TALENT_ART_TOTAL_W = TALENT_ART_TL_W + TALENT_ART_TR_W
+local TALENT_ART_TOTAL_H = TALENT_ART_TL_H + TALENT_ART_BL_H
+
+local function layoutTalentArt(pane)
+    local q = pane and pane.TalentQuads
+    if not q or not q.holder or not q.holder:IsShown() then
+        return
+    end
+    local w = pane:GetWidth() - 8
+    local h = pane:GetHeight() - 8
+    if w < 16 or h < 16 then
+        return
+    end
+    q.holder:ClearAllPoints()
+    q.holder:SetPoint("TOPLEFT", pane, "TOPLEFT", 4, -4)
+    q.holder:SetWidth(w)
+    q.holder:SetHeight(h)
+    local tlw = w * (TALENT_ART_TL_W / TALENT_ART_TOTAL_W)
+    local tlh = h * (TALENT_ART_TL_H / TALENT_ART_TOTAL_H)
+    local trw = w - tlw
+    local blh = h - tlh
+    local function place(tex, x, y, pw, ph)
+        tex:ClearAllPoints()
+        tex:SetPoint("TOPLEFT", q.holder, "TOPLEFT", x, -y)
+        tex:SetWidth(math.max(pw, 1))
+        tex:SetHeight(math.max(ph, 1))
+        tex:Show()
+    end
+    place(q.TL, 0, 0, tlw, tlh)
+    place(q.TR, tlw, 0, trw, tlh)
+    place(q.BL, 0, tlh, tlw, blh)
+    place(q.BR, tlw, tlh, trw, blh)
+end
+
 local function ensureTalentArt(pane)
     if pane.TalentQuads then
         return pane.TalentQuads
@@ -115,25 +154,21 @@ local function ensureTalentArt(pane)
     holder:SetPoint("TOPLEFT", 4, -4)
     holder:SetPoint("BOTTOMRIGHT", -4, 4)
     holder:SetFrameLevel(pane:GetFrameLevel())
-    local function quad(a, b, relA, relB)
-        local f = CreateFrame("Frame", nil, holder)
-        f:SetPoint(a, holder, relA)
-        f:SetPoint(b, holder, relB)
-        local tex = f:CreateTexture(nil, "BACKGROUND")
-        tex:SetAllPoints(f)
-        f.tex = tex
-        return f
+    local function makeTex()
+        local tex = holder:CreateTexture(nil, "BACKGROUND")
+        tex:SetDrawLayer("BACKGROUND", 0)
+        return tex
     end
-    -- Four frames, each pinned to a corner and the holder center so they
-    -- stretch with the pane. Textures use SetAllPoints (3.3.5 will not
-    -- stretch a Texture from two SetPoints the way a Frame does).
     pane.TalentQuads = {
         holder = holder,
-        TL = quad("TOPLEFT", "BOTTOMRIGHT", "TOPLEFT", "CENTER"),
-        TR = quad("TOPRIGHT", "BOTTOMLEFT", "TOPRIGHT", "CENTER"),
-        BL = quad("BOTTOMLEFT", "TOPRIGHT", "BOTTOMLEFT", "CENTER"),
-        BR = quad("BOTTOMRIGHT", "TOPLEFT", "BOTTOMRIGHT", "CENTER"),
+        TL = makeTex(),
+        TR = makeTex(),
+        BL = makeTex(),
+        BR = makeTex(),
     }
+    pane:SetScript("OnSizeChanged", function(self)
+        layoutTalentArt(self)
+    end)
     return pane.TalentQuads
 end
 
@@ -145,20 +180,16 @@ local function setPaneTalentArt(pane, tabId)
         return
     end
     local base = "Interface\\TalentFrame\\" .. bg .. "-"
-    local map = {
-        TL = "TopLeft",
-        TR = "TopRight",
-        BL = "BottomLeft",
-        BR = "BottomRight",
-    }
-    for key, suffix in pairs(map) do
-        local tex = q[key].tex
-        tex:SetTexture(base .. suffix)
-        tex:SetTexCoord(0, 1, 0, 1)
-        tex:SetAllPoints(q[key])
-        tex:Show()
-    end
+    q.TL:SetTexture(base .. "TopLeft")
+    q.TL:SetTexCoord(0, 1, 0, 1)
+    q.TR:SetTexture(base .. "TopRight")
+    q.TR:SetTexCoord(0, 0.6875, 0, 1)
+    q.BL:SetTexture(base .. "BottomLeft")
+    q.BL:SetTexCoord(0, 1, 0, 0.5859375)
+    q.BR:SetTexture(base .. "BottomRight")
+    q.BR:SetTexCoord(0, 0.6875, 0, 0.5859375)
     q.holder:Show()
+    layoutTalentArt(pane)
 end
 
 local function createScrollPane(name, parent, title)
@@ -928,6 +959,9 @@ local function buildFrame()
     end)
     frame:SetScript("OnSizeChanged", function()
         layoutClassRow()
+        if ui.talentPane then
+            layoutTalentArt(ui.talentPane)
+        end
     end)
 
     ui.frame = frame
