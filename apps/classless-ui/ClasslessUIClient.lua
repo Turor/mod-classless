@@ -331,10 +331,9 @@ end
 local function createSpellButton(index)
     local parent = ui.spellPane.Child
     local name = "ClasslessUISpellBtn" .. index
-    local btn = CreateFrame("Button", name, parent)
+    local btn = CreateFrame("Frame", name, parent)
     btn:SetSize(SPELL_CELL_W, SPELL_CELL_H)
-    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    btn:RegisterForDrag("LeftButton")
+    btn:EnableMouse(false)
 
     local prev = CreateFrame("Button", name .. "Prev", btn)
     prev:SetSize(16, 16)
@@ -344,17 +343,32 @@ local function createSpellButton(index)
     prev:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Disabled")
     btn.Prev = prev
 
-    local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(SPELL_ICON, SPELL_ICON)
-    icon:SetPoint("CENTER", 0, 6)
+    local iconBtn = CreateFrame("Button", name .. "Icon", btn)
+    iconBtn:SetSize(SPELL_ICON, SPELL_ICON)
+    iconBtn:SetPoint("CENTER", 0, 6)
+    iconBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    iconBtn:RegisterForDrag("LeftButton")
+    iconBtn:EnableMouse(true)
+    btn.IconBtn = iconBtn
+
+    local icon = iconBtn:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(iconBtn)
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     btn.Icon = icon
 
-    local border = btn:CreateTexture(nil, "OVERLAY")
+    local border = btn:CreateTexture(nil, "BACKGROUND")
     border:SetSize(SPELL_BORDER, SPELL_BORDER)
-    border:SetPoint("CENTER", icon, "CENTER")
+    border:SetPoint("CENTER", iconBtn, "CENTER")
     border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     btn.Border = border
+
+    local plus = iconBtn:CreateTexture(nil, "OVERLAY")
+    plus:SetSize(18, 18)
+    plus:SetPoint("TOPLEFT", -3, 3)
+    plus:SetTexture("Interface\\Buttons\\UI-PlusButton-Up")
+    plus:SetVertexColor(0.15, 1, 0.15)
+    plus:Hide()
+    btn.Plus = plus
 
     local next = CreateFrame("Button", name .. "Next", btn)
     next:SetSize(16, 16)
@@ -365,12 +379,11 @@ local function createSpellButton(index)
     btn.Next = next
 
     local rankFs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    rankFs:SetPoint("TOP", icon, "BOTTOM", 0, -1)
+    rankFs:SetPoint("TOP", iconBtn, "BOTTOM", 0, -1)
     btn.RankText = rankFs
 
-    local hilight = btn:CreateTexture(nil, "HIGHLIGHT")
-    hilight:SetSize(SPELL_ICON, SPELL_ICON)
-    hilight:SetPoint("CENTER", icon, "CENTER")
+    local hilight = iconBtn:CreateTexture(nil, "HIGHLIGHT")
+    hilight:SetAllPoints(iconBtn)
     hilight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
     hilight:SetBlendMode("ADD")
 
@@ -379,6 +392,15 @@ local function createSpellButton(index)
             return nil
         end
         return btn.family.ids[btn.family.selected]
+    end
+
+    local function updatePlus()
+        local id = selectedId()
+        if id and not isKnown(id) then
+            plus:Show()
+        else
+            plus:Hide()
+        end
     end
 
     prev:SetScript("OnClick", function()
@@ -396,19 +418,22 @@ local function createSpellButton(index)
         end
     end)
 
-    btn:SetScript("OnEnter", function(self)
+    iconBtn:SetScript("OnEnter", function(self)
         local id = selectedId()
         if not id then
+            plus:Hide()
             return
         end
+        updatePlus()
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetHyperlink("spell:" .. id)
         GameTooltip:Show()
     end)
-    btn:SetScript("OnLeave", function()
+    iconBtn:SetScript("OnLeave", function()
+        plus:Hide()
         GameTooltip:Hide()
     end)
-    btn:SetScript("OnClick", function(self, mouse)
+    iconBtn:SetScript("OnClick", function(self, mouse)
         local id = selectedId()
         if not id then
             return
@@ -426,7 +451,7 @@ local function createSpellButton(index)
         end
         castSpellId(id)
     end)
-    btn:SetScript("OnDragStart", function()
+    iconBtn:SetScript("OnDragStart", function()
         local id = selectedId()
         if id and isKnown(id) then
             pickupSpellId(id)
