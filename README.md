@@ -93,6 +93,74 @@ The numbered migration order matches the previous patch sequence:
 4.  Custom talents (`V018`–`V020`)
 5.  Skill race/class info (`V021`)
 
+### Updating skills (classless SkillLine / SkillLineAbility / SkillRaceClassInfo)
+
+Classless play needs every non-racial, non-language, non-pet skill available to every class. That is a **client DBC** change plus a **world DB** change. Talent trees are a separate pass (`dmls/talentchangeguides/`); this section is only skills.
+
+#### Client tables (SQLite → DBC)
+
+Work in `wrath_dbcs.sqlite` after conversion. The tables that matter:
+
+| Table | Role |
+|---|---|
+| `SkillLine` | Skill definition and `SkillLineCategory` (Class Skills, Languages, Weapon Skills, …). Rarely edited. |
+| `SkillLineAbility` | Which spell is granted by a skill, and which `class_mask` / `race_mask` may learn it. |
+| `SkillRaceClassInfo` | Whether a class/race combination may *have* the skill at all (`flags`, `class_mask`, `race_mask`, language skill tiers). |
+| `ChrClasses` | Class row used by the client (every class uses `display_power = 127` in this module). |
+
+`class_mask = 2047` (`0x7FF`) is all eleven WotLK classes. `race_mask` / `class_mask = -1` means “any”. Do **not** open racials, languages, or pet skills to every class.
+
+Typical SkillLineAbility patch (from `dmls/UsefulQueries.md`):
+
+```sql
+UPDATE SkillLineAbility
+SET class_mask = 2047
+WHERE id IN (
+    SELECT SkillLineAbility.id
+    FROM SkillLineAbility
+    JOIN SkillLine ON SkillLine.id = skill_line
+    JOIN SkillLineCategory ON SkillLine.category_id = SkillLineCategory.id
+    WHERE SkillLine.display_name_lang_en_gb NOT LIKE '%Racial%'
+      AND SkillLine.display_name_lang_en_gb NOT LIKE '%Language%'
+      AND SkillLine.display_name_lang_en_gb NOT LIKE '%Pet%'
+);
+```
+
+SkillRaceClassInfo flags used here:
+
+- **1040** — class skills (shown / usable as class skills for every class).
+- **128** — languages (keep language skills language-shaped; they still need two rows per language: skill tier `0` and skill tier `21`).
+
+The current SkillRaceClassInfo edits live in Flyway `V021__SkillRaceClassInfoUpdateGuide.sql` (source notes: `dmls/SkillRaceClassInfoUpdateGuide.sql`).
+
+#### Process
+
+1. Convert extracted `DBFilesClient` to `wrath_dbcs.sqlite` (`wow_dbc_converter`).
+2. Inspect with the SELECTs in `SkillRaceClassInfoUpdateGuide.sql` / `UsefulQueries.md` until the masks and flags look right.
+3. Put **new** mutating SQL in `dmls/migrations/Vnnn__….sql` and run `./apply_patches.sh` (or `.ps1`). Do not re-edit an already-applied `V0xx` file; Flyway will checksum-fail. Add `V022` (or later) instead.
+4. Export the patched tables to INSERT dumps that `wow_custom_dbc` consumes. File stem **must** match the DBC table name:
+
+   - `dmls/required/SkillLineAbility.sql`
+   - `dmls/required/SkillRaceClassInfo.sql`
+   - `dmls/required/ChrClasses.sql` (if class rows changed)
+
+   `wow_custom_dbc` creates the table from the converter schema, then runs those INSERTs. It does not read Flyway history.
+5. Generate DBCs and deploy (next section): `SkillLineAbility.dbc`, `SkillRaceClassInfo.dbc`, and `ChrClasses.dbc` go into `UIMods/patch-n/DBFilesClient` and the worldserver `dbc` directory, then into `patch-n.mpq`.
+
+`dmls/required/*.sql` are the shipped snapshots of those tables, not incremental patches. After you change sqlite, replace the dump for every table you touched.
+
+#### Server world DB (starting skills)
+
+DBC changes let the client *show* and *train* skills. Characters still need rows in `acore_world.playercreateinfo_skills` or they log in without the skill.
+
+That lives in `data/sql/db-world/update_starting_skills.sql` (AzerothCore module SQL, not Flyway/sqlite):
+
+- Set `classMask = 2047` and `raceMask = 1791` on non-racial, non-language starting skills.
+- Insert any missing weapon skills (for example fist weapons, skill `473`).
+- Languages stay special (`skill` 98 Orcish / 109 Common): widen `raceMask` if needed, do not treat them like class skills.
+
+Apply with the rest of the module’s `data/sql/db-world/` on the world database. Existing characters keep `acore_characters.character_skills`; only new characters pick up `playercreateinfo_skills`.
+
 ### Outputting Generated DBCs to UIMods and Worldserver
 
 To use the generated DBCs in a client-side patch and for the server, copy them to the `UIMods/patch-n/DBFilesClient` directory and the worldserver `dbc` directory. This is often part of a larger build process:
