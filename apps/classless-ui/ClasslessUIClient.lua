@@ -303,6 +303,31 @@ local function pickupSpellId(spellId)
     end
 end
 
+local function castSpellId(spellId)
+    if not spellId or not isKnown(spellId) then
+        return
+    end
+    local book = bookTypeSpell()
+    local slot = spellBookSlotForId(spellId)
+    local onSelf = IsModifiedClick and IsModifiedClick("SELFCAST")
+    if slot and CastSpell then
+        if onSelf then
+            pcall(CastSpell, slot, book, true)
+        else
+            pcall(CastSpell, slot, book)
+        end
+        return
+    end
+    local name, rank = GetSpellInfo(spellId)
+    if name and CastSpellByName then
+        local cmd = name
+        if rank and rank ~= "" then
+            cmd = name .. "(" .. rank .. ")"
+        end
+        pcall(CastSpellByName, cmd, onSelf)
+    end
+end
+
 local function createSpellButton(index)
     local parent = ui.spellPane.Child
     local name = "ClasslessUISpellBtn" .. index
@@ -383,15 +408,6 @@ local function createSpellButton(index)
     btn:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
-    btn:SetScript("OnMouseDown", function(self, mouse)
-        if mouse ~= "LeftButton" then
-            return
-        end
-        local id = selectedId()
-        if id and isKnown(id) then
-            pickupSpellId(id)
-        end
-    end)
     btn:SetScript("OnClick", function(self, mouse)
         local id = selectedId()
         if not id then
@@ -400,11 +416,15 @@ local function createSpellButton(index)
         if mouse == "RightButton" then
             return
         end
-        if isKnown(id) then
-            pickupSpellId(id)
-        else
+        if not isKnown(id) then
             AIO.Handle("ClasslessUIServer", "LearnSpell", id)
+            return
         end
+        if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
+            pickupSpellId(id)
+            return
+        end
+        castSpellId(id)
     end)
     btn:SetScript("OnDragStart", function()
         local id = selectedId()
