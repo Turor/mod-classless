@@ -117,6 +117,21 @@ local function talentOwnsSpell(spellId)
     return false
 end
 
+local petTabSet
+local function isPetTabId(tabId)
+    if not petTabSet then
+        petTabSet = {}
+        for _, id in ipairs((Catalog and Catalog.petTabs) or { 409, 410, 411 }) do
+            petTabSet[id] = true
+        end
+    end
+    return tabId and petTabSet[tabId]
+end
+
+local function unitHasSpell(unit, spellId)
+    return unit and unit.HasSpell and unit:HasSpell(spellId)
+end
+
 local function collectLearned(player)
     local learned = {}
     if Catalog and Catalog.spellSet then
@@ -128,10 +143,12 @@ local function collectLearned(player)
     end
     if Catalog and Catalog.talentById then
         for _, node in pairs(Catalog.talentById) do
-            for i = 1, #node.r do
-                local spellId = node.r[i]
-                if player:HasSpell(spellId) then
-                    learned[spellId] = true
+            if not isPetTabId(node.tabId) then
+                for i = 1, #node.r do
+                    local spellId = node.r[i]
+                    if player:HasSpell(spellId) then
+                        learned[spellId] = true
+                    end
                 end
             end
         end
@@ -139,7 +156,28 @@ local function collectLearned(player)
     return learned
 end
 
-local function treePoints(player, tabId)
+local function collectPetLearned(pet)
+    local learned = {}
+    if not pet or not Catalog or not Catalog.petTabs then
+        return learned
+    end
+    for _, tabId in ipairs(Catalog.petTabs) do
+        local nodes = Catalog.talents and Catalog.talents[tabId]
+        if nodes then
+            for _, node in ipairs(nodes) do
+                for i = 1, #node.r do
+                    local spellId = node.r[i]
+                    if unitHasSpell(pet, spellId) then
+                        learned[spellId] = true
+                    end
+                end
+            end
+        end
+    end
+    return learned
+end
+
+local function treePointsOn(hasFn, tabId)
     local nodes = Catalog.talents and Catalog.talents[tabId]
     if not nodes then
         return 0
@@ -148,13 +186,19 @@ local function treePoints(player, tabId)
     for _, node in ipairs(nodes) do
         local rank = 0
         for i = 1, #node.r do
-            if player:HasSpell(node.r[i]) then
+            if hasFn(node.r[i]) then
                 rank = i
             end
         end
         spent = spent + rank
     end
     return spent
+end
+
+local function treePoints(player, tabId)
+    return treePointsOn(function(id)
+        return player:HasSpell(id)
+    end, tabId)
 end
 
 local function canLearnSpell(player, spellId)
@@ -189,10 +233,18 @@ local function sendState(player)
     if player.GetFreeTalentPoints then
         points = player:GetFreeTalentPoints() or 0
     end
+    local pet = player:GetPet()
+    local petPoints = 0
+    if pet and pet.GetFreeTalentPoints then
+        petPoints = pet:GetFreeTalentPoints() or 0
+    end
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
         learnable = collectLearnable(player),
+        petLearned = collectPetLearned(pet),
+        petOut = pet ~= nil,
         points = points,
+        petPoints = petPoints,
     })
 end
 
@@ -233,6 +285,25 @@ function Handlers.CastSpell(player, spellId)
     player:CastSpell(target, spellId, false)
 end
 
+local function talentPrereqsOk(hasFn, node, rank)
+    if rank > 1 and not hasFn(node.r[rank - 1]) then
+        return false, "Learn the previous talent rank first."
+    end
+    if node.p and node.p > 0 then
+        local dep = Catalog.talentById[node.p]
+        local need = (node.pr or 0) + 1
+        if not dep or not dep.r[need] or not hasFn(dep.r[need]) then
+            return false, "Missing talent prerequisite."
+        end
+    end
+    if node.t and node.t > 0 then
+        if treePointsOn(hasFn, node.tabId) < (node.t * 5) then
+            return false, "Not enough points in this tree."
+        end
+    end
+    return true
+end
+
 function Handlers.LearnTalent(player, talentId, rank)
     talentId = tonumber(talentId)
     rank = tonumber(rank)
@@ -248,28 +319,54 @@ function Handlers.LearnTalent(player, talentId, rank)
     if not spellId then
         return
     end
+    if isPetTabId(node.tabId) then
+        local pet = player:GetPet()
+        if not pet then
+            player:SendBroadcastMessage("You need a pet out to learn pet talents.")
+            return
+        end
+        local hasFn = function(id)
+            return unitHasSpell(pet, id)
+        end
+        local points = 0
+        if pet.GetFreeTalentPoints then
+            points = pet:GetFreeTalentPoints() or 0
+        end
+        if points < 1 then
+            player:SendBroadcastMessage("No pet talent points remaining.")
+            return
+        end
+        local ok, err = talentPrereqsOk(hasFn, node, rank)
+        if not ok then
+            player:SendBroadcastMessage(err)
+            return
+        end
+        if hasFn(spellId) then
+            sendState(player)
+            return
+        end
+        if player.LearnPetTalent then
+            player:LearnPetTalent(pet:GetGUID(), talentId, rank - 1)
+        end
+        if not unitHasSpell(pet, spellId) and pet.LearnSpell then
+            pet:LearnSpell(spellId)
+            pet:SetFreeTalentPoints(points - 1)
+        end
+        sendState(player)
+        return
+    end
     local points = player:GetFreeTalentPoints() or 0
     if points < 1 then
         player:SendBroadcastMessage("No talent points remaining.")
         return
     end
-    if rank > 1 and not player:HasSpell(node.r[rank - 1]) then
-        player:SendBroadcastMessage("Learn the previous talent rank first.")
+    local hasFn = function(id)
+        return player:HasSpell(id)
+    end
+    local ok, err = talentPrereqsOk(hasFn, node, rank)
+    if not ok then
+        player:SendBroadcastMessage(err)
         return
-    end
-    if node.p and node.p > 0 then
-        local dep = Catalog.talentById[node.p]
-        local need = (node.pr or 0) + 1
-        if not dep or not dep.r[need] or not player:HasSpell(dep.r[need]) then
-            player:SendBroadcastMessage("Missing talent prerequisite.")
-            return
-        end
-    end
-    if node.t and node.t > 0 then
-        if treePoints(player, node.tabId) < (node.t * 5) then
-            player:SendBroadcastMessage("Not enough points in this tree.")
-            return
-        end
     end
     if player:HasSpell(spellId) then
         sendState(player)
@@ -292,7 +389,29 @@ function Handlers.UnlearnTalent(player, talentId, rank)
     end
     rank = math.floor(rank)
     local spellId = node.r[rank]
-    if not spellId or not player:HasSpell(spellId) then
+    if not spellId then
+        return
+    end
+    if isPetTabId(node.tabId) then
+        local pet = player:GetPet()
+        if not pet or not unitHasSpell(pet, spellId) then
+            return
+        end
+        if node.r[rank + 1] and unitHasSpell(pet, node.r[rank + 1]) then
+            player:SendBroadcastMessage("Unlearn the higher rank first.")
+            return
+        end
+        if pet.UnlearnSpell then
+            pet:UnlearnSpell(spellId, rank > 1, true)
+        elseif pet.RemoveSpell then
+            pet:RemoveSpell(spellId, rank > 1, true)
+        end
+        local points = pet:GetFreeTalentPoints() or 0
+        pet:SetFreeTalentPoints(points + 1)
+        sendState(player)
+        return
+    end
+    if not player:HasSpell(spellId) then
         return
     end
     -- Refuse if a later rank of this node is still known.

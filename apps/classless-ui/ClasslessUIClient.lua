@@ -25,7 +25,7 @@ local ui = {
     talentButtons = {},
     talentBranchPool = {},
     spellRankSel = {},
-    state = { learned = {}, learnable = {}, points = 0 },
+    state = { learned = {}, learnable = {}, petLearned = {}, petOut = false, points = 0, petPoints = 0 },
 }
 
 local refreshPanes
@@ -249,11 +249,25 @@ local function isKnown(spellId)
     if not spellId then
         return false
     end
+    if ui.selectedExtra == "pet" then
+        local learned = ui.state.petLearned
+        return learned and (learned[spellId] or learned[tostring(spellId)]) and true
+    end
     local learned = ui.state.learned
     if learned and (learned[spellId] or learned[tostring(spellId)]) then
         return true
     end
     if IsSpellKnown and IsSpellKnown(spellId) then
+        return true
+    end
+    return false
+end
+
+local function hasPetOut()
+    if ui.state.petOut then
+        return true
+    end
+    if UnitExists and UnitExists("pet") then
         return true
     end
     return false
@@ -761,7 +775,19 @@ local function refreshSpecButtons()
         end
     end
     for _, extra in ipairs(ui.extraButtons) do
-        highlightButton(extra, ui.selectedExtra == extra.extraId)
+        if extra.extraId == "pet" then
+            if hasPetOut() then
+                extra:Show()
+            else
+                extra:Hide()
+                if ui.selectedExtra == "pet" then
+                    ui.selectedExtra = nil
+                    ui.selectedSpecIndex = 1
+                    highlightButton(ui.specButtons[1], true)
+                end
+            end
+        end
+        highlightButton(extra, extra:IsShown() and ui.selectedExtra == extra.extraId)
     end
 end
 
@@ -772,6 +798,9 @@ function refreshPanes()
     local info = classInfo(ui.selectedClassId)
     local className = info and info.name or "?"
     local points = ui.state.points or 0
+    if ui.selectedExtra == "pet" then
+        points = ui.state.petPoints or 0
+    end
     if ui.spellPane.PointsOverlay then
         ui.spellPane.PointsOverlay:Hide()
     end
@@ -1024,21 +1053,38 @@ function Handlers.ApplyState(player, state)
                 end
             end
         end
+        local petLearned = {}
+        if type(state.petLearned) == "table" then
+            for k, v in pairs(state.petLearned) do
+                if v then
+                    local id = tonumber(k) or k
+                    petLearned[id] = true
+                end
+            end
+        end
         ui.state = {
             learned = learned,
             learnable = learnable,
+            petLearned = petLearned,
+            petOut = state.petOut and true or false,
             points = tonumber(state.points) or 0,
+            petPoints = tonumber(state.petPoints) or 0,
         }
     end
     if ui.frame and ui.frame:IsShown() then
+        refreshSpecButtons()
         refreshPanes()
     end
 end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("SPELLS_CHANGED")
+events:RegisterEvent("UNIT_PET")
 local lastStateReq = 0
-events:SetScript("OnEvent", function()
+events:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_PET" and unit ~= "player" then
+        return
+    end
     if not (ui.frame and ui.frame:IsShown()) then
         return
     end
