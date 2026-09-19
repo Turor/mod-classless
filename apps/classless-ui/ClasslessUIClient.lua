@@ -107,84 +107,69 @@ local function createTabButton(name, parent, w, h)
     return btn
 end
 
-local function layoutCornerArt(pane)
-    local art = pane.CornerArt
-    if not art then
-        return
+local function ensureTalentArt(pane)
+    if pane.TalentQuads then
+        return pane.TalentQuads
     end
-    -- Anchor to CENTER so the four pieces always fill the pane, including
-    -- while it is being resized (GetWidth can be 0 before first layout).
-    art.TopLeft:ClearAllPoints()
-    art.TopLeft:SetPoint("TOPLEFT", 4, -4)
-    art.TopLeft:SetPoint("BOTTOMRIGHT", pane, "CENTER", 0, 0)
-    art.TopRight:ClearAllPoints()
-    art.TopRight:SetPoint("TOPRIGHT", -4, -4)
-    art.TopRight:SetPoint("BOTTOMLEFT", pane, "CENTER", 0, 0)
-    art.BottomLeft:ClearAllPoints()
-    art.BottomLeft:SetPoint("BOTTOMLEFT", 4, 4)
-    art.BottomLeft:SetPoint("TOPRIGHT", pane, "CENTER", 0, 0)
-    art.BottomRight:ClearAllPoints()
-    art.BottomRight:SetPoint("BOTTOMRIGHT", -4, 4)
-    art.BottomRight:SetPoint("TOPLEFT", pane, "CENTER", 0, 0)
-end
-
-local function setPanePaper(pane)
-    local art = pane.CornerArt
-    if not art then
-        return
+    local holder = CreateFrame("Frame", nil, pane)
+    holder:SetPoint("TOPLEFT", 4, -4)
+    holder:SetPoint("BOTTOMRIGHT", -4, 4)
+    holder:SetFrameLevel(pane:GetFrameLevel())
+    local function quad(a, b, relA, relB)
+        local f = CreateFrame("Frame", nil, holder)
+        f:SetPoint(a, holder, relA)
+        f:SetPoint(b, holder, relB)
+        local tex = f:CreateTexture(nil, "BACKGROUND")
+        tex:SetAllPoints(f)
+        f.tex = tex
+        return f
     end
-    -- 3.3.5 spellbook page pieces (Spellbook-Page-1 does not exist in WotLK).
-    art.TopLeft:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-TopLeft")
-    art.TopLeft:SetTexCoord(0, 1, 0, 1)
-    art.TopRight:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-TopRight")
-    art.TopRight:SetTexCoord(0, 1, 0, 1)
-    art.BottomLeft:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-BotLeft")
-    art.BottomLeft:SetTexCoord(0, 1, 0, 1)
-    art.BottomRight:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-BotRight")
-    art.BottomRight:SetTexCoord(0, 1, 0, 1)
-    layoutCornerArt(pane)
+    -- Four frames, each pinned to a corner and the holder center so they
+    -- stretch with the pane. Textures use SetAllPoints (3.3.5 will not
+    -- stretch a Texture from two SetPoints the way a Frame does).
+    pane.TalentQuads = {
+        holder = holder,
+        TL = quad("TOPLEFT", "BOTTOMRIGHT", "TOPLEFT", "CENTER"),
+        TR = quad("TOPRIGHT", "BOTTOMLEFT", "TOPRIGHT", "CENTER"),
+        BL = quad("BOTTOMLEFT", "TOPRIGHT", "BOTTOMLEFT", "CENTER"),
+        BR = quad("BOTTOMRIGHT", "TOPLEFT", "BOTTOMRIGHT", "CENTER"),
+    }
+    return pane.TalentQuads
 end
 
 local function setPaneTalentArt(pane, tabId)
-    local art = pane.CornerArt
-    if not art then
-        return
-    end
-    local bg = Catalog and Catalog.tabBg and Catalog.tabBg[tabId]
+    local q = ensureTalentArt(pane)
+    local bg = Catalog and Catalog.tabBg and tabId and Catalog.tabBg[tabId]
     if not bg then
-        setPanePaper(pane)
+        q.holder:Hide()
         return
     end
     local base = "Interface\\TalentFrame\\" .. bg .. "-"
-    art.TopLeft:SetTexture(base .. "TopLeft")
-    art.TopLeft:SetTexCoord(0, 1, 0, 1)
-    art.TopRight:SetTexture(base .. "TopRight")
-    art.TopRight:SetTexCoord(0, 1, 0, 1)
-    art.BottomLeft:SetTexture(base .. "BottomLeft")
-    art.BottomLeft:SetTexCoord(0, 1, 0, 1)
-    art.BottomRight:SetTexture(base .. "BottomRight")
-    art.BottomRight:SetTexCoord(0, 1, 0, 1)
-    layoutCornerArt(pane)
+    local map = {
+        TL = "TopLeft",
+        TR = "TopRight",
+        BL = "BottomLeft",
+        BR = "BottomRight",
+    }
+    for key, suffix in pairs(map) do
+        local tex = q[key].tex
+        tex:SetTexture(base .. suffix)
+        tex:SetTexCoord(0, 1, 0, 1)
+        tex:SetAllPoints(q[key])
+        tex:Show()
+    end
+    q.holder:Show()
 end
 
 local function createScrollPane(name, parent, title)
     local pane = CreateFrame("Frame", name, parent)
     pane:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         tile = true, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    pane:SetBackdropColor(0, 0, 0, 0)
-
-    local art = {}
-    for _, key in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
-        local tex = pane:CreateTexture(nil, "BACKGROUND")
-        tex:SetDrawLayer("BACKGROUND", 1)
-        tex:Show()
-        art[key] = tex
-    end
-    pane.CornerArt = art
-    setPanePaper(pane)
+    pane:SetBackdropColor(0.08, 0.08, 0.08, 0.85)
 
     local titleFs = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleFs:SetPoint("TOP", 0, -8)
@@ -743,8 +728,7 @@ function refreshPanes()
     if ui.selectedExtra == "glyph" then
         ui.spellPane.Title:SetText(className .. " glyphs")
         ui.talentPane.Title:SetText("Glyph slots")
-        setPanePaper(ui.spellPane)
-        setPanePaper(ui.talentPane)
+        setPaneTalentArt(ui.talentPane, nil)
         renderSpellbook({})
         hidePool(ui.talentButtons, 1)
         return
@@ -752,7 +736,6 @@ function refreshPanes()
     if ui.selectedExtra == "pet" then
         ui.spellPane.Title:SetText("Pet spells")
         ui.talentPane.Title:SetText("Pet talents")
-        setPanePaper(ui.spellPane)
         local petTabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         setPaneTalentArt(ui.talentPane, petTabs[1])
         renderSpellbook({})
@@ -774,7 +757,6 @@ function refreshPanes()
     local specName = spec and spec.name or "?"
     ui.spellPane.Title:SetText(specName .. " spells")
     ui.talentPane.Title:SetText(specName .. " talents")
-    setPanePaper(ui.spellPane)
     setPaneTalentArt(ui.talentPane, spec and spec.tabId)
     renderSpellbook(ids)
     hidePool(ui.talentButtons, 1)
@@ -946,12 +928,6 @@ local function buildFrame()
     end)
     frame:SetScript("OnSizeChanged", function()
         layoutClassRow()
-        if ui.spellPane then
-            layoutCornerArt(ui.spellPane)
-        end
-        if ui.talentPane then
-            layoutCornerArt(ui.talentPane)
-        end
     end)
 
     ui.frame = frame
