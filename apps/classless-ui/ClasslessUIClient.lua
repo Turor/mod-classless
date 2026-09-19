@@ -222,13 +222,21 @@ local function createScrollPane(name, parent, title)
     -- FontStrings on the pane sit under the ScrollFrame/talent buttons.
     -- A child frame with a higher frame level draws on top of them.
     local overlay = CreateFrame("Frame", name .. "PointsOverlay", pane)
-    overlay:SetHeight(20)
-    overlay:SetPoint("TOPLEFT", scroll, "TOPLEFT", 4, -2)
-    overlay:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", -4, -2)
+    overlay:SetHeight(24)
+    overlay:SetWidth(110)
+    overlay:SetPoint("BOTTOMLEFT", pane, "BOTTOMLEFT", 8, 8)
     overlay:SetFrameLevel(scroll:GetFrameLevel() + 20)
-    overlay:EnableMouse(false)
+    overlay:EnableMouse(true)
+    overlay:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    overlay:SetBackdropColor(0.2, 0.2, 0.2, 0.95)
+    overlay:SetBackdropBorderColor(0.55, 0.55, 0.55, 1)
     local fs = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    fs:SetPoint("TOP", 0, 0)
+    fs:SetPoint("CENTER", 0, 0)
     fs:SetText("")
     overlay.Text = fs
     pane.Points = fs
@@ -769,9 +777,11 @@ function refreshPanes()
     end
     if ui.talentPane.PointsOverlay then
         ui.talentPane.PointsOverlay:SetFrameLevel(ui.talentPane.Scroll:GetFrameLevel() + 20)
+        ui.talentPane.Points:SetText("Unspent: " .. tostring(points))
+        local w = ui.talentPane.Points:GetStringWidth() or 80
+        ui.talentPane.PointsOverlay:SetWidth(w + 20)
         ui.talentPane.PointsOverlay:Show()
     end
-    ui.talentPane.Points:SetText("Unspent: " .. tostring(points))
     ui.spellPane.Points:SetText("")
 
     if ui.selectedExtra == "glyph" then
