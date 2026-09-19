@@ -859,10 +859,17 @@ end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("SPELLS_CHANGED")
+local lastStateReq = 0
 events:SetScript("OnEvent", function()
-    if ui.frame and ui.frame:IsShown() then
-        AIO.Handle("ClasslessUIServer", "RequestState")
+    if not (ui.frame and ui.frame:IsShown()) then
+        return
     end
+    local now = (GetTime and GetTime()) or 0
+    if now > 0 and (now - lastStateReq) < 0.25 then
+        return
+    end
+    lastStateReq = now
+    AIO.Handle("ClasslessUIServer", "RequestState")
 end)
 
 SLASH_CLASSLESSUI1 = "/classless"
