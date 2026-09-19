@@ -216,12 +216,89 @@ local function groupSpellFamilies(ids)
     return families
 end
 
+local function cursorHasSpell()
+    if CursorHasSpell and CursorHasSpell() then
+        return true
+    end
+    if GetCursorInfo then
+        local kind = GetCursorInfo()
+        return kind == "spell"
+    end
+    return false
+end
+
+local function bookTypeSpell()
+    return BOOKTYPE_SPELL or "spell"
+end
+
+local function spellBookSlotForId(spellId)
+    local book = bookTypeSpell()
+    local wantName, wantRank = GetSpellInfo(spellId)
+    local function slotMatches(slot)
+        local link = GetSpellLink and GetSpellLink(slot, book)
+        if link then
+            local id = tonumber(string.match(link, "spell:(%d+)"))
+            if id == spellId then
+                return true
+            end
+        end
+        if wantName and GetSpellName then
+            local n, r = GetSpellName(slot, book)
+            if n == wantName and (not wantRank or wantRank == "" or r == wantRank) then
+                return true
+            end
+        end
+        return false
+    end
+    if GetNumSpellTabs and GetSpellTabInfo then
+        local tabs = GetNumSpellTabs() or 0
+        for tab = 1, tabs do
+            local _, _, offset, numSpells = GetSpellTabInfo(tab)
+            offset = offset or 0
+            numSpells = numSpells or 0
+            for i = 1, numSpells do
+                local slot = offset + i
+                if slotMatches(slot) then
+                    return slot
+                end
+            end
+        end
+    end
+    local maxSlots = MAX_SPELLS or 1024
+    for slot = 1, maxSlots do
+        if slotMatches(slot) then
+            return slot
+        end
+    end
+    return nil
+end
+
 local function pickupSpellId(spellId)
     if not spellId or not isKnown(spellId) then
         return
     end
-    ClearCursor()
-    if PickupSpell then
+    if ClearCursor then
+        ClearCursor()
+    end
+    local name, rank = GetSpellInfo(spellId)
+    local slot = spellBookSlotForId(spellId)
+    if slot and PickupSpell then
+        pcall(PickupSpell, slot, bookTypeSpell())
+        if cursorHasSpell() then
+            return
+        end
+    end
+    if name and PickupSpell then
+        if rank and rank ~= "" then
+            pcall(PickupSpell, name, rank)
+            if cursorHasSpell() then
+                return
+            end
+        end
+        pcall(PickupSpell, name)
+        if cursorHasSpell() then
+            return
+        end
         pcall(PickupSpell, spellId)
     end
 end
@@ -306,6 +383,15 @@ local function createSpellButton(index)
     btn:SetScript("OnLeave", function()
         GameTooltip:Hide()
     end)
+    btn:SetScript("OnMouseDown", function(self, mouse)
+        if mouse ~= "LeftButton" then
+            return
+        end
+        local id = selectedId()
+        if id and isKnown(id) then
+            pickupSpellId(id)
+        end
+    end)
     btn:SetScript("OnClick", function(self, mouse)
         local id = selectedId()
         if not id then
@@ -336,6 +422,7 @@ local function createTalentButton(index)
     local btn = CreateFrame("Button", name, parent)
     btn:SetSize(TALENT_ICON, TALENT_ICON)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:RegisterForDrag("LeftButton")
 
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints(btn)
@@ -391,6 +478,16 @@ local function createTalentButton(index)
             if id and isKnown(id) then
                 pickupSpellId(id)
             end
+        end
+    end)
+    btn:SetScript("OnDragStart", function(self)
+        if not self.node then
+            return
+        end
+        local current = talentRank(self.node)
+        local id = self.node.r[math.max(current, 1)]
+        if id and isKnown(id) then
+            pickupSpellId(id)
         end
     end)
     return btn
