@@ -277,9 +277,23 @@ local function isLearnable(spellId)
     if not spellId then
         return false
     end
+    if Catalog and Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
+        return false
+    end
     local t = ui.state.learnable
     if not t then
         return false
+    end
+    return t[spellId] or t[tostring(spellId)]
+end
+
+local function reqLevel(spellId)
+    if not spellId then
+        return nil
+    end
+    local t = ui.state.reqLevels
+    if not t then
+        return nil
     end
     return t[spellId] or t[tostring(spellId)]
 end
@@ -308,6 +322,9 @@ local function groupSpellFamilies(ids)
     local byName = {}
     local families = {}
     for _, spellId in ipairs(ids) do
+        if Catalog and Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
+            -- skip
+        else
         local name, rank, icon = GetSpellInfo(spellId)
         if name then
             local fam = byName[name]
@@ -320,6 +337,7 @@ local function groupSpellFamilies(ids)
             if icon and not fam.icon then
                 fam.icon = icon
             end
+        end
         end
     end
     for _, fam in ipairs(families) do
@@ -499,6 +517,15 @@ local function createSpellButton(index)
     plus:Hide()
     btn.Plus = plus
 
+    local levelFs = iconBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    levelFs:SetPoint("CENTER", iconBtn, "CENTER", 0, 0)
+    if levelFs.SetFont then
+        levelFs:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
+    end
+    levelFs:SetTextColor(1, 0.82, 0)
+    levelFs:SetText("")
+    btn.LevelText = levelFs
+
     local next = CreateFrame("Button", name .. "Next", btn)
     next:SetSize(SPELL_ARROW, SPELL_ARROW)
     next:SetPoint("LEFT", iconBtn, "RIGHT", -2, 0)
@@ -525,10 +552,18 @@ local function createSpellButton(index)
 
     local function updatePlus()
         local id = selectedId()
+        plus:Hide()
+        levelFs:SetText("")
+        if not id or isKnown(id) then
+            return
+        end
         if isLearnable(id) then
             plus:Show()
-        else
-            plus:Hide()
+            return
+        end
+        local req = reqLevel(id)
+        if req and req > 0 then
+            levelFs:SetText(tostring(req))
         end
     end
 
@@ -561,6 +596,14 @@ local function createSpellButton(index)
     iconBtn:SetScript("OnLeave", function()
         plus:Hide()
         GameTooltip:Hide()
+        local id = selectedId()
+        levelFs:SetText("")
+        if id and not isKnown(id) and not isLearnable(id) then
+            local req = reqLevel(id)
+            if req and req > 0 then
+                levelFs:SetText(tostring(req))
+            end
+        end
     end)
     iconBtn:SetScript("OnClick", function(self, mouse)
         local id = selectedId()
@@ -571,7 +614,9 @@ local function createSpellButton(index)
             return
         end
         if not isKnown(id) then
-            AIO.Handle("ClasslessUIServer", "LearnSpell", id)
+            if isLearnable(id) then
+                AIO.Handle("ClasslessUIServer", "LearnSpell", id)
+            end
             return
         end
         if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
@@ -711,6 +756,18 @@ local function renderSpellbook(ids)
             btn.Next:Enable()
         else
             btn.Next:Disable()
+        end
+        if btn.LevelText then
+            btn.LevelText:SetText("")
+            if not isKnown(id) and not isLearnable(id) then
+                local req = reqLevel(id)
+                if req and req > 0 then
+                    btn.LevelText:SetText(tostring(req))
+                end
+            end
+        end
+        if btn.Plus then
+            btn.Plus:Hide()
         end
         btn:Show()
     end
@@ -1062,9 +1119,17 @@ function Handlers.ApplyState(player, state)
                 end
             end
         end
+        local reqLevels = {}
+        if type(state.reqLevels) == "table" then
+            for k, v in pairs(state.reqLevels) do
+                local id = tonumber(k) or k
+                reqLevels[id] = tonumber(v)
+            end
+        end
         ui.state = {
             learned = learned,
             learnable = learnable,
+            reqLevels = reqLevels,
             petLearned = petLearned,
             petOut = state.petOut and true or false,
             points = tonumber(state.points) or 0,

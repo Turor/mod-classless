@@ -202,6 +202,9 @@ local function treePoints(player, tabId)
 end
 
 local function canLearnSpell(player, spellId)
+    if Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
+        return false
+    end
     if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
         return false
     end
@@ -228,6 +231,22 @@ local function collectLearnable(player)
     return learnable
 end
 
+local function collectReqLevels(player)
+    local req = {}
+    if not Catalog or not Catalog.spellSet then
+        return req
+    end
+    for spellId in pairs(Catalog.spellSet) do
+        if not player:HasSpell(spellId) and not canLearnSpell(player, spellId) then
+            local lvl = spellLevel(spellId)
+            if lvl and lvl > 0 then
+                req[spellId] = lvl
+            end
+        end
+    end
+    return req
+end
+
 local function sendState(player)
     local points = 0
     if player.GetFreeTalentPoints then
@@ -241,6 +260,7 @@ local function sendState(player)
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
         learnable = collectLearnable(player),
+        reqLevels = collectReqLevels(player),
         petLearned = collectPetLearned(pet),
         petOut = pet ~= nil,
         points = points,

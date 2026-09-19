@@ -16,6 +16,11 @@ ClasslessUICatalog = {
         { id = "pet",   name = "Pet",   icon = "Interface\\Icons\\Ability_Hunter_BeastTaming" },
     },
 
+    -- Not player-trainable (triggered effects, extra "ranks" that share a name).
+    blockedSpells = {
+        [42651] = true, -- Army of the Dead ghoul-summon trigger, not rank 2
+    },
+
     classes = {},
     spells = {},  -- [classId][specId] = { { first = spellId }, ... }
     talents = {}, -- [tabId] = { { id, tier, column, ranks = {}, prereq }, ... }

@@ -28,6 +28,11 @@ for class_id, specs in SPEC_SKILLS.items():
     for spec_id, skill in specs.items():
         SKILL_TO_SPEC[skill] = (class_id, spec_id)
 
+# Triggered/effect spells that share a player spell name (not real ranks).
+BLOCKED_SPELLS = {
+    42651,  # Army of the Dead summon trigger
+}
+
 TUPLE_RE = re.compile(r"\(([^()]+)\)")
 
 
@@ -81,7 +86,7 @@ def main():
         if len(row) < 3:
             continue
         skill, spell = row[1], row[2]
-        if spell <= 0 or spell in talent_spell_ids:
+        if spell <= 0 or spell in talent_spell_ids or spell in BLOCKED_SPELLS:
             continue
         mapped = SKILL_TO_SPEC.get(skill)
         if not mapped:
