@@ -46,9 +46,10 @@ modules/mod-classless/apps/classless-ui/
 Deploy:
 
 ```
-scp -o BatchMode=yes -r apps/classless-ui \
-  wow-dev:/usr/games/wow/server/lua_scripts/ClasslessUI
-ssh -o BatchMode=yes wow-dev -- systemctl restart worldserver.service
+scp -o BatchMode=yes apps/classless-ui/*.lua \
+  wow-dev:/usr/games/wow/server/lua_scripts/ClasslessUI/
+# ALE.AutoReload watches lua_scripts; wait ~1s. Client: /aio reset (or relog).
+# In-game GM: .reload ale  if the watcher misses. Do not restart worldserver for Lua.
 ```
 
 Keep `lua_scripts/AIO_Server` in place. After client-Lua changes, players need `/aio reset` then relog.

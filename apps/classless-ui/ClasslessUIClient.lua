@@ -594,16 +594,8 @@ local function createSpellButton(index)
         GameTooltip:Show()
     end)
     iconBtn:SetScript("OnLeave", function()
-        plus:Hide()
         GameTooltip:Hide()
-        local id = selectedId()
-        levelFs:SetText("")
-        if id and not isKnown(id) and not isLearnable(id) then
-            local req = reqLevel(id)
-            if req and req > 0 then
-                levelFs:SetText(tostring(req))
-            end
-        end
+        updatePlus()
     end)
     iconBtn:SetScript("OnClick", function(self, mouse)
         local id = selectedId()
@@ -767,7 +759,11 @@ local function renderSpellbook(ids)
             end
         end
         if btn.Plus then
-            btn.Plus:Hide()
+            if isLearnable(id) then
+                btn.Plus:Show()
+            else
+                btn.Plus:Hide()
+            end
         end
         btn:Show()
     end
