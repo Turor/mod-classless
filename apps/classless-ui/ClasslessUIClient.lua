@@ -21,8 +21,23 @@ local ui = {
     selectedExtra = nil, -- "glyph" | "pet" | nil
     spellPane = nil,
     talentPane = nil,
-    state = { learned = {}, talents = {}, points = 0 },
+    spellButtons = {},
+    talentButtons = {},
+    talentBranchPool = {},
+    spellRankSel = {},
+    state = { learned = {}, points = 0 },
 }
+
+local refreshPanes
+
+local SPELL_ICON = 36
+local SPELL_CELL_W = 78
+local SPELL_CELL_H = 62
+local SPELL_COLS = 5
+local TALENT_ICON = 32
+local TALENT_GAP = 63
+local TALENT_OFF_X = 28
+local TALENT_OFF_Y = 12
 
 local function setShown(tex, shown)
     if not tex then
@@ -117,7 +132,348 @@ local function createScrollPane(name, parent, title)
 
     pane.Scroll = scroll
     pane.Child = child
+
+    local points = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    points:SetPoint("BOTTOMLEFT", 10, 6)
+    points:SetText("")
+    pane.Points = points
     return pane
+end
+
+local function isKnown(spellId)
+    if not spellId then
+        return false
+    end
+    local learned = ui.state.learned
+    if learned and (learned[spellId] or learned[tostring(spellId)]) then
+        return true
+    end
+    if IsSpellKnown and IsSpellKnown(spellId) then
+        return true
+    end
+    return false
+end
+
+local function talentRank(node)
+    local rank = 0
+    for i, spellId in ipairs(node.r) do
+        if isKnown(spellId) then
+            rank = i
+        end
+    end
+    return rank
+end
+
+local function specSpellIds()
+    local info = classInfo(ui.selectedClassId)
+    local spec = info and info.specs and info.specs[ui.selectedSpecIndex]
+    if not spec or not Catalog or not Catalog.spells then
+        return {}, spec
+    end
+    local byClass = Catalog.spells[ui.selectedClassId]
+    return (byClass and byClass[spec.id]) or {}, spec
+end
+
+local function groupSpellFamilies(ids)
+    local byName = {}
+    local families = {}
+    for _, spellId in ipairs(ids) do
+        local name, rank, icon = GetSpellInfo(spellId)
+        if name then
+            local fam = byName[name]
+            if not fam then
+                fam = { name = name, icon = icon, ids = {} }
+                byName[name] = fam
+                families[#families + 1] = fam
+            end
+            fam.ids[#fam.ids + 1] = spellId
+            if icon and not fam.icon then
+                fam.icon = icon
+            end
+        end
+    end
+    for _, fam in ipairs(families) do
+        table.sort(fam.ids)
+        local highestKnown = 1
+        for i, id in ipairs(fam.ids) do
+            if isKnown(id) then
+                highestKnown = i
+            end
+        end
+        local selected = ui.spellRankSel[fam.name] or highestKnown
+        if selected < 1 then
+            selected = 1
+        elseif selected > #fam.ids then
+            selected = #fam.ids
+        end
+        fam.selected = selected
+        ui.spellRankSel[fam.name] = selected
+    end
+    table.sort(families, function(a, b)
+        return a.name < b.name
+    end)
+    return families
+end
+
+local function pickupSpellId(spellId)
+    if not spellId or not isKnown(spellId) then
+        return
+    end
+    ClearCursor()
+    if PickupSpell then
+        pcall(PickupSpell, spellId)
+    end
+end
+
+local function createSpellButton(index)
+    local parent = ui.spellPane.Child
+    local name = "ClasslessUISpellBtn" .. index
+    local btn = CreateFrame("Button", name, parent)
+    btn:SetSize(SPELL_CELL_W, SPELL_CELL_H)
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn:RegisterForDrag("LeftButton")
+
+    local prev = CreateFrame("Button", name .. "Prev", btn)
+    prev:SetSize(16, 16)
+    prev:SetPoint("LEFT", 0, 6)
+    prev:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+    prev:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
+    prev:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Disabled")
+    btn.Prev = prev
+
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(SPELL_ICON, SPELL_ICON)
+    icon:SetPoint("CENTER", 0, 6)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.Icon = icon
+
+    local border = btn:CreateTexture(nil, "OVERLAY")
+    border:SetSize(SPELL_ICON + 14, SPELL_ICON + 14)
+    border:SetPoint("CENTER", icon, "CENTER")
+    border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    btn.Border = border
+
+    local next = CreateFrame("Button", name .. "Next", btn)
+    next:SetSize(16, 16)
+    next:SetPoint("RIGHT", 0, 6)
+    next:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+    next:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+    next:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Disabled")
+    btn.Next = next
+
+    local rankFs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    rankFs:SetPoint("TOP", icon, "BOTTOM", 0, -1)
+    btn.RankText = rankFs
+
+    local hilight = btn:CreateTexture(nil, "HIGHLIGHT")
+    hilight:SetSize(SPELL_ICON, SPELL_ICON)
+    hilight:SetPoint("CENTER", icon, "CENTER")
+    hilight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+    hilight:SetBlendMode("ADD")
+
+    local function selectedId()
+        if not btn.family then
+            return nil
+        end
+        return btn.family.ids[btn.family.selected]
+    end
+
+    prev:SetScript("OnClick", function()
+        if btn.family and btn.family.selected > 1 then
+            btn.family.selected = btn.family.selected - 1
+            ui.spellRankSel[btn.family.name] = btn.family.selected
+            refreshPanes()
+        end
+    end)
+    next:SetScript("OnClick", function()
+        if btn.family and btn.family.selected < #btn.family.ids then
+            btn.family.selected = btn.family.selected + 1
+            ui.spellRankSel[btn.family.name] = btn.family.selected
+            refreshPanes()
+        end
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+        local id = selectedId()
+        if not id then
+            return
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink("spell:" .. id)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    btn:SetScript("OnClick", function(self, mouse)
+        local id = selectedId()
+        if not id then
+            return
+        end
+        if mouse == "RightButton" then
+            return
+        end
+        if isKnown(id) then
+            pickupSpellId(id)
+        else
+            AIO.Handle("ClasslessUIServer", "LearnSpell", id)
+        end
+    end)
+    btn:SetScript("OnDragStart", function()
+        local id = selectedId()
+        if id and isKnown(id) then
+            pickupSpellId(id)
+        end
+    end)
+
+    return btn
+end
+
+local function createTalentButton(index)
+    local parent = ui.talentPane.Child
+    local name = "ClasslessUITalentBtn" .. index
+    local btn = CreateFrame("Button", name, parent)
+    btn:SetSize(TALENT_ICON, TALENT_ICON)
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    local icon = btn:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints(btn)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    btn.Icon = icon
+
+    local slot = btn:CreateTexture(nil, "OVERLAY")
+    slot:SetPoint("TOPLEFT", -4, 4)
+    slot:SetPoint("BOTTOMRIGHT", 4, -4)
+    slot:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    btn.Slot = slot
+
+    local rankFs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    rankFs:SetPoint("BOTTOMRIGHT", 2, -2)
+    btn.RankText = rankFs
+
+    local hilight = btn:CreateTexture(nil, "HIGHLIGHT")
+    hilight:SetAllPoints(btn)
+    hilight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+    hilight:SetBlendMode("ADD")
+
+    btn:SetScript("OnEnter", function(self)
+        if not self.node then
+            return
+        end
+        local rank = math.max(talentRank(self.node), 1)
+        local id = self.node.r[rank]
+        if not id then
+            return
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetHyperlink("spell:" .. id)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+    end)
+    btn:SetScript("OnClick", function(self, mouse)
+        if not self.node then
+            return
+        end
+        local current = talentRank(self.node)
+        if mouse == "RightButton" then
+            if current > 0 then
+                AIO.Handle("ClasslessUIServer", "UnlearnTalent", self.node.id, current)
+            end
+            return
+        end
+        if current < #self.node.r then
+            AIO.Handle("ClasslessUIServer", "LearnTalent", self.node.id, current + 1)
+        else
+            local id = self.node.r[current]
+            if id and isKnown(id) then
+                pickupSpellId(id)
+            end
+        end
+    end)
+    return btn
+end
+
+local function hidePool(pool, fromIndex)
+    for i = fromIndex, #pool do
+        pool[i]:Hide()
+    end
+end
+
+local function renderSpellbook(ids)
+    local families = groupSpellFamilies(ids or {})
+    local child = ui.spellPane.Child
+    local width = math.max(ui.spellPane:GetWidth() - 36, SPELL_COLS * SPELL_CELL_W)
+    child:SetWidth(width)
+    local rows = math.max(1, math.ceil(#families / SPELL_COLS))
+    child:SetHeight(math.max(rows * SPELL_CELL_H + 8, ui.spellPane:GetHeight() - 40))
+
+    for i, fam in ipairs(families) do
+        local btn = ui.spellButtons[i]
+        if not btn then
+            btn = createSpellButton(i)
+            ui.spellButtons[i] = btn
+        end
+        btn.family = fam
+        local col = (i - 1) % SPELL_COLS
+        local row = math.floor((i - 1) / SPELL_COLS)
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", 4 + col * SPELL_CELL_W, -4 - row * SPELL_CELL_H)
+        local sel = fam.selected or 1
+        local id = fam.ids[sel]
+        local _, _, icon = GetSpellInfo(id)
+        btn.Icon:SetTexture(icon or fam.icon)
+        if btn.Icon.SetDesaturated then
+            btn.Icon:SetDesaturated(not isKnown(id))
+        end
+        btn.RankText:SetText(sel .. "/" .. #fam.ids)
+        btn.Prev:SetEnabled(sel > 1)
+        btn.Next:SetEnabled(sel < #fam.ids)
+        btn:Show()
+    end
+    hidePool(ui.spellButtons, #families + 1)
+end
+
+local function renderTalentTree(tabId, yOffset, startIndex)
+    yOffset = yOffset or 0
+    startIndex = startIndex or 1
+    local nodes = Catalog and Catalog.talents and Catalog.talents[tabId] or {}
+    local used = startIndex - 1
+    local maxTier = 0
+    for _, node in ipairs(nodes) do
+        used = used + 1
+        local btn = ui.talentButtons[used]
+        if not btn then
+            btn = createTalentButton(used)
+            ui.talentButtons[used] = btn
+        end
+        btn.node = node
+        local rank = talentRank(node)
+        local id = node.r[math.max(rank, 1)]
+        local _, _, icon = GetSpellInfo(id)
+        btn.Icon:SetTexture(icon)
+        if btn.Icon.SetDesaturated then
+            btn.Icon:SetDesaturated(rank == 0)
+        end
+        btn.RankText:SetText(rank .. "/" .. #node.r)
+        if rank == 0 then
+            btn.Slot:SetVertexColor(0.5, 0.5, 0.5)
+        elseif rank < #node.r then
+            btn.Slot:SetVertexColor(0.1, 1.0, 0.1)
+        else
+            btn.Slot:SetVertexColor(1.0, 0.82, 0)
+        end
+        local x = TALENT_OFF_X + (node.c * TALENT_GAP)
+        local y = yOffset - TALENT_OFF_Y - (node.t * TALENT_GAP) -- yOffset is already negative or 0
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", x, y)
+        btn:Show()
+        if node.t > maxTier then
+            maxTier = node.t
+        end
+    end
+    return used, (maxTier + 1) * TALENT_GAP + TALENT_OFF_Y + 24
 end
 
 local function refreshSpecButtons()
@@ -141,23 +497,52 @@ local function refreshSpecButtons()
     end
 end
 
-local function refreshPanes()
+function refreshPanes()
+    if not ui.spellPane then
+        return
+    end
     local info = classInfo(ui.selectedClassId)
     local className = info and info.name or "?"
+    local points = ui.state.points or 0
+    ui.talentPane.Points:SetText("Unspent: " .. tostring(points))
+    ui.spellPane.Points:SetText("")
+
     if ui.selectedExtra == "glyph" then
         ui.spellPane.Title:SetText(className .. " glyphs")
         ui.talentPane.Title:SetText("Glyph slots")
+        renderSpellbook({})
+        hidePool(ui.talentButtons, 1)
         return
     end
     if ui.selectedExtra == "pet" then
         ui.spellPane.Title:SetText("Pet spells")
         ui.talentPane.Title:SetText("Pet talents")
+        renderSpellbook({})
+        local tabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
+        local used = 0
+        local totalHeight = 0
+        for _, tabId in ipairs(tabs) do
+            local u, h = renderTalentTree(tabId, -totalHeight, used + 1)
+            used = u
+            totalHeight = totalHeight + h
+        end
+        hidePool(ui.talentButtons, used + 1)
+        ui.talentPane.Child:SetWidth(4 * TALENT_GAP + TALENT_OFF_X + 40)
+        ui.talentPane.Child:SetHeight(math.max(totalHeight + 20, 200))
         return
     end
-    local spec = info and info.specs and info.specs[ui.selectedSpecIndex]
+
+    local ids, spec = specSpellIds()
     local specName = spec and spec.name or "?"
     ui.spellPane.Title:SetText(specName .. " spells")
     ui.talentPane.Title:SetText(specName .. " talents")
+    renderSpellbook(ids)
+    hidePool(ui.talentButtons, 1)
+    local tabId = spec and spec.tabId
+    local used, height = renderTalentTree(tabId, 0)
+    hidePool(ui.talentButtons, used + 1)
+    ui.talentPane.Child:SetWidth(4 * TALENT_GAP + TALENT_OFF_X + 40)
+    ui.talentPane.Child:SetHeight(math.max(height, 200))
 end
 
 local function selectClass(classId)
@@ -302,12 +687,32 @@ end
 
 function Handlers.ApplyState(player, state)
     if type(state) == "table" then
-        ui.state = state
+        local learned = {}
+        if type(state.learned) == "table" then
+            for k, v in pairs(state.learned) do
+                if v then
+                    local id = tonumber(k) or k
+                    learned[id] = true
+                end
+            end
+        end
+        ui.state = {
+            learned = learned,
+            points = tonumber(state.points) or 0,
+        }
     end
     if ui.frame and ui.frame:IsShown() then
         refreshPanes()
     end
 end
+
+local events = CreateFrame("Frame")
+events:RegisterEvent("SPELLS_CHANGED")
+events:SetScript("OnEvent", function()
+    if ui.frame and ui.frame:IsShown() then
+        AIO.Handle("ClasslessUIServer", "RequestState")
+    end
+end)
 
 SLASH_CLASSLESSUI1 = "/classless"
 SlashCmdList["CLASSLESSUI"] = function()

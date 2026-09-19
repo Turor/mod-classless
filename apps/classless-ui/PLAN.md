@@ -8,7 +8,8 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 
 | Date | Iter | Landed | Still stubbed |
 |---|---|---|---|
-| 2026-09-19 | 0–1 | Living plan; Catalog class/spec header data; AIO client frame with class row, spec/General/Glyph/Pet tabs, empty scroll panes; `/classless` + `.classless`; `RequestState` / `ApplyState` round-trip | Spell icons, ranks, learn, pickup, talent grid, branches, unlearn, glyph/pet panes, Mage DBC catalog, strip XML from MPQ |
+| 2026-09-19 | 0–1 | Living plan; header chrome; empty panes | Catalog + rendering |
+| 2026-09-19 | 2–5 | `CatalogData.lua` from Talent.sql + SkillLineAbility (2604 spells, 1014 talent nodes); spellbook families with rank arrows; talent grid; LearnSpell / LearnTalent / UnlearnTalent; RequestState sends real `HasSpell` | Prereq branch textures, glyph pane, pet spells, pickup edge cases, strip XML from MPQ, N-key hook |
 
 ## Why a new system
 
