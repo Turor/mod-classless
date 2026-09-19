@@ -70,7 +70,7 @@ those three commented out statements a single time if you are going to increase 
 
 #### Executing SQL Patches
 
-Automated scripts are provided to apply the SQL patches to the SQLite database in the correct order. These scripts can be found in `apps/patchgenerator/`.
+SQLite patches are versioned Flyway migrations in `apps/patchgenerator/dmls/migrations/` (`V001__…` through `V021__…`). `apply_patches.sh` / `apply_patches.ps1` download the Flyway CLI on first run (into `apps/patchgenerator/.flyway/`, gitignored) and run `flyway migrate` against `wrath_dbcs.sqlite`. Already-applied versions are recorded in `flyway_schema_history` inside that database, so re-running the script is a no-op.
 
 **On Windows (PowerShell):**
 ```powershell
@@ -82,15 +82,16 @@ Automated scripts are provided to apply the SQL patches to the SQLite database i
 ./apply_patches.sh
 ```
 
-**Execution Order:**
-The scripts apply patches in the following sequence:
-1.  `required/`: Core patches necessary for the module's functionality.
-2.  `spellchangeguides/`: Modifications to spells to support classless mechanics.
-3.  `statfilemodifications/`: Adjustments to item and character stats.
-4.  `talentchangeguides/*.sql`: General talent updates.
-5.  `talentchangeguides/CustomTalents/`: New custom talents added by the module.
-6.  `TalentTabTweaks.sql`: UI-related talent tab adjustments.
-7.  `SkillRaceClassInfoUpdateGuide.sql`: Updates for skill, race, and class information.
+New DBC-sqlite changes belong in `dmls/migrations/` as the next `Vnnn__Description.sql`. Do not add unordered files under `spellchangeguides/` / `talentchangeguides/` and expect them to run.
+
+`dmls/required/*.sql` are full-table dumps consumed by `wow_custom_dbc` when generating `.dbc` files. They are not Flyway migrations (re-inserting them into a populated converter database would collide on primary keys).
+
+The numbered migration order matches the previous patch sequence:
+1.  Spell change guides (`V001`–`V004`)
+2.  Stat file modifications (`V005`–`V006`)
+3.  Talent update guides (`V007`–`V017`)
+4.  Custom talents (`V018`–`V020`)
+5.  Skill race/class info (`V021`)
 
 ### Outputting Generated DBCs to UIMods and Worldserver
 
