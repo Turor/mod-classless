@@ -522,7 +522,7 @@ local function createSpellButton(index)
     if levelFs.SetFont then
         levelFs:SetFont("Fonts\\FRIZQT__.TTF", 12, "OUTLINE")
     end
-    levelFs:SetTextColor(1, 0.82, 0)
+    levelFs:SetTextColor(1, 0.1, 0.1)
     levelFs:SetText("")
     btn.LevelText = levelFs
 
