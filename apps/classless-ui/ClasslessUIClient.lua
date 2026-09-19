@@ -112,21 +112,20 @@ local function layoutCornerArt(pane)
     if not art then
         return
     end
-    local w = math.max(pane:GetWidth() - 8, 2)
-    local h = math.max(pane:GetHeight() - 8, 2)
-    local hw, hh = w / 2, h / 2
+    -- Anchor to CENTER so the four pieces always fill the pane, including
+    -- while it is being resized (GetWidth can be 0 before first layout).
     art.TopLeft:ClearAllPoints()
     art.TopLeft:SetPoint("TOPLEFT", 4, -4)
-    art.TopLeft:SetSize(hw, hh)
+    art.TopLeft:SetPoint("BOTTOMRIGHT", pane, "CENTER", 0, 0)
     art.TopRight:ClearAllPoints()
     art.TopRight:SetPoint("TOPRIGHT", -4, -4)
-    art.TopRight:SetSize(hw, hh)
+    art.TopRight:SetPoint("BOTTOMLEFT", pane, "CENTER", 0, 0)
     art.BottomLeft:ClearAllPoints()
     art.BottomLeft:SetPoint("BOTTOMLEFT", 4, 4)
-    art.BottomLeft:SetSize(hw, hh)
+    art.BottomLeft:SetPoint("TOPRIGHT", pane, "CENTER", 0, 0)
     art.BottomRight:ClearAllPoints()
     art.BottomRight:SetPoint("BOTTOMRIGHT", -4, 4)
-    art.BottomRight:SetSize(hw, hh)
+    art.BottomRight:SetPoint("TOPLEFT", pane, "CENTER", 0, 0)
 end
 
 local function setPanePaper(pane)
@@ -134,15 +133,15 @@ local function setPanePaper(pane)
     if not art then
         return
     end
-    local paper = "Interface\\Spellbook\\Spellbook-Page-1"
-    art.TopLeft:SetTexture(paper)
-    art.TopLeft:SetTexCoord(0, 0.5, 0, 0.5)
-    art.TopRight:SetTexture(paper)
-    art.TopRight:SetTexCoord(0.5, 1, 0, 0.5)
-    art.BottomLeft:SetTexture(paper)
-    art.BottomLeft:SetTexCoord(0, 0.5, 0.5, 1)
-    art.BottomRight:SetTexture(paper)
-    art.BottomRight:SetTexCoord(0.5, 1, 0.5, 1)
+    -- 3.3.5 spellbook page pieces (Spellbook-Page-1 does not exist in WotLK).
+    art.TopLeft:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-TopLeft")
+    art.TopLeft:SetTexCoord(0, 1, 0, 1)
+    art.TopRight:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-TopRight")
+    art.TopRight:SetTexCoord(0, 1, 0, 1)
+    art.BottomLeft:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-BotLeft")
+    art.BottomLeft:SetTexCoord(0, 1, 0, 1)
+    art.BottomRight:SetTexture("Interface\\Spellbook\\UI-SpellbookPanel-BotRight")
+    art.BottomRight:SetTexCoord(0, 1, 0, 1)
     layoutCornerArt(pane)
 end
 
@@ -171,17 +170,17 @@ end
 local function createScrollPane(name, parent, title)
     local pane = CreateFrame("Frame", name, parent)
     pane:SetBackdrop({
-        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         tile = true, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    pane:SetBackdropColor(0, 0, 0, 0.25)
+    pane:SetBackdropColor(0, 0, 0, 0)
 
     local art = {}
     for _, key in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
         local tex = pane:CreateTexture(nil, "BACKGROUND")
-        tex:SetDrawLayer("BACKGROUND", 0)
+        tex:SetDrawLayer("BACKGROUND", 1)
+        tex:Show()
         art[key] = tex
     end
     pane.CornerArt = art
