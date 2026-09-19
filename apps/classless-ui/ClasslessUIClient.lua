@@ -31,9 +31,10 @@ local ui = {
 local refreshPanes
 
 local SPELL_ICON = 36
-local SPELL_CELL_W = 78
-local SPELL_CELL_H = 62
-local SPELL_COLS = 5
+local SPELL_BORDER = 64
+local SPELL_CELL_W = 96
+local SPELL_CELL_H = 80
+local SPELL_COLS = 4
 local TALENT_ICON = 32
 local TALENT_GAP = 63
 local TALENT_OFF_X = 28
@@ -248,7 +249,7 @@ local function createSpellButton(index)
     btn.Icon = icon
 
     local border = btn:CreateTexture(nil, "OVERLAY")
-    border:SetSize(SPELL_ICON + 14, SPELL_ICON + 14)
+    border:SetSize(SPELL_BORDER, SPELL_BORDER)
     border:SetPoint("CENTER", icon, "CENTER")
     border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     btn.Border = border
@@ -342,8 +343,8 @@ local function createTalentButton(index)
     btn.Icon = icon
 
     local slot = btn:CreateTexture(nil, "OVERLAY")
-    slot:SetPoint("TOPLEFT", -4, 4)
-    slot:SetPoint("BOTTOMRIGHT", 4, -4)
+    slot:SetPoint("CENTER")
+    slot:SetSize(64, 64)
     slot:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     btn.Slot = slot
 
