@@ -219,10 +219,21 @@ local function createScrollPane(name, parent, title)
     pane.Scroll = scroll
     pane.Child = child
 
-    local points = pane:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    points:SetPoint("BOTTOMLEFT", 10, 6)
-    points:SetText("")
-    pane.Points = points
+    -- FontStrings on the pane sit under the ScrollFrame/talent buttons.
+    -- A child frame with a higher frame level draws on top of them.
+    local overlay = CreateFrame("Frame", name .. "PointsOverlay", pane)
+    overlay:SetHeight(20)
+    overlay:SetPoint("TOPLEFT", scroll, "TOPLEFT", 4, -2)
+    overlay:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", -4, -2)
+    overlay:SetFrameLevel(scroll:GetFrameLevel() + 20)
+    overlay:EnableMouse(false)
+    local fs = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    fs:SetPoint("TOP", 0, 0)
+    fs:SetText("")
+    overlay.Text = fs
+    pane.Points = fs
+    pane.PointsOverlay = overlay
+    overlay:Hide()
     return pane
 end
 
@@ -753,6 +764,13 @@ function refreshPanes()
     local info = classInfo(ui.selectedClassId)
     local className = info and info.name or "?"
     local points = ui.state.points or 0
+    if ui.spellPane.PointsOverlay then
+        ui.spellPane.PointsOverlay:Hide()
+    end
+    if ui.talentPane.PointsOverlay then
+        ui.talentPane.PointsOverlay:SetFrameLevel(ui.talentPane.Scroll:GetFrameLevel() + 20)
+        ui.talentPane.PointsOverlay:Show()
+    end
     ui.talentPane.Points:SetText("Unspent: " .. tostring(points))
     ui.spellPane.Points:SetText("")
 
