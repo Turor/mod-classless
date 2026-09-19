@@ -428,8 +428,16 @@ local function renderSpellbook(ids)
             btn.Icon:SetDesaturated(not isKnown(id))
         end
         btn.RankText:SetText(sel .. "/" .. #fam.ids)
-        btn.Prev:SetEnabled(sel > 1)
-        btn.Next:SetEnabled(sel < #fam.ids)
+        if sel > 1 then
+            btn.Prev:Enable()
+        else
+            btn.Prev:Disable()
+        end
+        if sel < #fam.ids then
+            btn.Next:Enable()
+        else
+            btn.Next:Disable()
+        end
         btn:Show()
     end
     hidePool(ui.spellButtons, #families + 1)
