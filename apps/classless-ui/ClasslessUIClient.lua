@@ -35,7 +35,6 @@ local SPELL_BORDER = 64
 local SPELL_ARROW = 24
 local SPELL_CELL_W = 112
 local SPELL_CELL_H = 80
-local SPELL_COLS = 4
 local TALENT_ICON = 32
 local TALENT_GAP = 63
 local TALENT_OFF_X = 28
@@ -108,6 +107,67 @@ local function createTabButton(name, parent, w, h)
     return btn
 end
 
+local function layoutCornerArt(pane)
+    local art = pane.CornerArt
+    if not art then
+        return
+    end
+    local w = math.max(pane:GetWidth() - 8, 2)
+    local h = math.max(pane:GetHeight() - 8, 2)
+    local hw, hh = w / 2, h / 2
+    art.TopLeft:ClearAllPoints()
+    art.TopLeft:SetPoint("TOPLEFT", 4, -4)
+    art.TopLeft:SetSize(hw, hh)
+    art.TopRight:ClearAllPoints()
+    art.TopRight:SetPoint("TOPRIGHT", -4, -4)
+    art.TopRight:SetSize(hw, hh)
+    art.BottomLeft:ClearAllPoints()
+    art.BottomLeft:SetPoint("BOTTOMLEFT", 4, 4)
+    art.BottomLeft:SetSize(hw, hh)
+    art.BottomRight:ClearAllPoints()
+    art.BottomRight:SetPoint("BOTTOMRIGHT", -4, 4)
+    art.BottomRight:SetSize(hw, hh)
+end
+
+local function setPanePaper(pane)
+    local art = pane.CornerArt
+    if not art then
+        return
+    end
+    local paper = "Interface\\Spellbook\\Spellbook-Page-1"
+    art.TopLeft:SetTexture(paper)
+    art.TopLeft:SetTexCoord(0, 0.5, 0, 0.5)
+    art.TopRight:SetTexture(paper)
+    art.TopRight:SetTexCoord(0.5, 1, 0, 0.5)
+    art.BottomLeft:SetTexture(paper)
+    art.BottomLeft:SetTexCoord(0, 0.5, 0.5, 1)
+    art.BottomRight:SetTexture(paper)
+    art.BottomRight:SetTexCoord(0.5, 1, 0.5, 1)
+    layoutCornerArt(pane)
+end
+
+local function setPaneTalentArt(pane, tabId)
+    local art = pane.CornerArt
+    if not art then
+        return
+    end
+    local bg = Catalog and Catalog.tabBg and Catalog.tabBg[tabId]
+    if not bg then
+        setPanePaper(pane)
+        return
+    end
+    local base = "Interface\\TalentFrame\\" .. bg .. "-"
+    art.TopLeft:SetTexture(base .. "TopLeft")
+    art.TopLeft:SetTexCoord(0, 1, 0, 1)
+    art.TopRight:SetTexture(base .. "TopRight")
+    art.TopRight:SetTexCoord(0, 1, 0, 1)
+    art.BottomLeft:SetTexture(base .. "BottomLeft")
+    art.BottomLeft:SetTexCoord(0, 1, 0, 1)
+    art.BottomRight:SetTexture(base .. "BottomRight")
+    art.BottomRight:SetTexCoord(0, 1, 0, 1)
+    layoutCornerArt(pane)
+end
+
 local function createScrollPane(name, parent, title)
     local pane = CreateFrame("Frame", name, parent)
     pane:SetBackdrop({
@@ -116,7 +176,16 @@ local function createScrollPane(name, parent, title)
         tile = true, tileSize = 16, edgeSize = 16,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    pane:SetBackdropColor(0, 0, 0, 0.6)
+    pane:SetBackdropColor(0, 0, 0, 0.25)
+
+    local art = {}
+    for _, key in ipairs({ "TopLeft", "TopRight", "BottomLeft", "BottomRight" }) do
+        local tex = pane:CreateTexture(nil, "BACKGROUND")
+        tex:SetDrawLayer("BACKGROUND", 0)
+        art[key] = tex
+    end
+    pane.CornerArt = art
+    setPanePaper(pane)
 
     local titleFs = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleFs:SetPoint("TOP", 0, -8)
@@ -559,9 +628,11 @@ end
 local function renderSpellbook(ids)
     local families = groupSpellFamilies(ids or {})
     local child = ui.spellPane.Child
-    local width = math.max(ui.spellPane:GetWidth() - 36, SPELL_COLS * SPELL_CELL_W)
+    local paneW = math.max(ui.spellPane:GetWidth() - 36, SPELL_CELL_W)
+    local cols = math.max(2, math.floor(paneW / SPELL_CELL_W))
+    local width = math.max(paneW, cols * SPELL_CELL_W)
     child:SetWidth(width)
-    local rows = math.max(1, math.ceil(#families / SPELL_COLS))
+    local rows = math.max(1, math.ceil(#families / cols))
     child:SetHeight(math.max(rows * SPELL_CELL_H + 8, ui.spellPane:GetHeight() - 40))
 
     for i, fam in ipairs(families) do
@@ -571,8 +642,8 @@ local function renderSpellbook(ids)
             ui.spellButtons[i] = btn
         end
         btn.family = fam
-        local col = (i - 1) % SPELL_COLS
-        local row = math.floor((i - 1) / SPELL_COLS)
+        local col = (i - 1) % cols
+        local row = math.floor((i - 1) / cols)
         btn:ClearAllPoints()
         btn:SetPoint("TOPLEFT", 4 + col * SPELL_CELL_W, -4 - row * SPELL_CELL_H)
         local sel = fam.selected or 1
@@ -673,6 +744,8 @@ function refreshPanes()
     if ui.selectedExtra == "glyph" then
         ui.spellPane.Title:SetText(className .. " glyphs")
         ui.talentPane.Title:SetText("Glyph slots")
+        setPanePaper(ui.spellPane)
+        setPanePaper(ui.talentPane)
         renderSpellbook({})
         hidePool(ui.talentButtons, 1)
         return
@@ -680,6 +753,9 @@ function refreshPanes()
     if ui.selectedExtra == "pet" then
         ui.spellPane.Title:SetText("Pet spells")
         ui.talentPane.Title:SetText("Pet talents")
+        setPanePaper(ui.spellPane)
+        local petTabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
+        setPaneTalentArt(ui.talentPane, petTabs[1])
         renderSpellbook({})
         local tabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         local used = 0
@@ -699,6 +775,8 @@ function refreshPanes()
     local specName = spec and spec.name or "?"
     ui.spellPane.Title:SetText(specName .. " spells")
     ui.talentPane.Title:SetText(specName .. " talents")
+    setPanePaper(ui.spellPane)
+    setPaneTalentArt(ui.talentPane, spec and spec.tabId)
     renderSpellbook(ids)
     hidePool(ui.talentButtons, 1)
     local tabId = spec and spec.tabId
@@ -743,10 +821,19 @@ local function buildFrame()
     frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
     frame:SetMovable(true)
+    frame:SetResizable(true)
+    if frame.SetMinResize then
+        frame:SetMinResize(800, 520)
+        frame:SetMaxResize(1600, 1100)
+    end
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+    frame:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+    end)
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
@@ -755,6 +842,21 @@ local function buildFrame()
     })
     frame:Hide()
     tinsert(UISpecialFrames, "ClasslessUIFrame")
+
+    local grip = CreateFrame("Button", "ClasslessUIFrameResize", frame)
+    grip:SetSize(16, 16)
+    grip:SetPoint("BOTTOMRIGHT", -6, 6)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatFrame-ResizeButton")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatFrame-ResizeButton")
+    grip:SetScript("OnMouseDown", function()
+        frame:StartSizing("BOTTOMRIGHT")
+    end)
+    grip:SetScript("OnMouseUp", function()
+        frame:StopMovingOrSizing()
+        if refreshPanes then
+            refreshPanes()
+        end
+    end)
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOP", 0, -16)
@@ -773,12 +875,19 @@ local function buildFrame()
     local btnW = 64
     local gap = 12
     local totalW = count * btnW + math.max(count - 1, 0) * gap
-    local startX = math.max((FRAME_W - 40 - totalW) / 2, 0)
+
+    local function layoutClassRow()
+        local startX = math.max((frame:GetWidth() - 40 - totalW) / 2, 0)
+        for i, btn in ipairs(ui.classButtons) do
+            btn:ClearAllPoints()
+            btn:SetPoint("TOPLEFT", startX + (i - 1) * (btnW + gap), 0)
+        end
+    end
 
     for i, classId in ipairs(order) do
         local info = classInfo(classId)
         local btn = createIconButton("ClasslessUIClass" .. classId, classRow, btnW, 80, 56)
-        btn:SetPoint("TOPLEFT", startX + (i - 1) * (btnW + gap), 0)
+        btn:SetPoint("TOPLEFT", 0, 0)
         btn.classId = classId
         if info then
             btn.Icon:SetTexture(info.icon)
@@ -836,8 +945,18 @@ local function buildFrame()
         AIO.Handle("ClasslessUIServer", "RequestState")
         refreshPanes()
     end)
+    frame:SetScript("OnSizeChanged", function()
+        layoutClassRow()
+        if ui.spellPane then
+            layoutCornerArt(ui.spellPane)
+        end
+        if ui.talentPane then
+            layoutCornerArt(ui.talentPane)
+        end
+    end)
 
     ui.frame = frame
+    layoutClassRow()
     selectClass(ui.selectedClassId)
     return frame
 end

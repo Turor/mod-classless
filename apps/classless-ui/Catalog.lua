@@ -19,6 +19,42 @@ ClasslessUICatalog = {
     classes = {},
     spells = {},  -- [classId][specId] = { { first = spellId }, ... }
     talents = {}, -- [tabId] = { { id, tier, column, ranks = {}, prereq }, ... }
+    -- TalentTab.dbc background_file (Interface\\TalentFrame\\<name>-TopLeft etc.)
+    tabBg = {
+        [41] = "MageFire",
+        [61] = "MageFrost",
+        [81] = "MageArcane",
+        [161] = "WarriorArms",
+        [163] = "WarriorProtection",
+        [164] = "WarriorFury",
+        [181] = "RogueCombat",
+        [182] = "RogueAssassination",
+        [183] = "RogueSubtlety",
+        [201] = "PriestDiscipline",
+        [202] = "PriestHoly",
+        [203] = "PriestShadow",
+        [261] = "ShamanElementalCombat",
+        [262] = "ShamanRestoration",
+        [263] = "ShamanEnhancement",
+        [281] = "DruidFeralCombat",
+        [282] = "DruidRestoration",
+        [283] = "DruidBalance",
+        [301] = "WarlockDestruction",
+        [302] = "WarlockCurses",
+        [303] = "WarlockSummoning",
+        [361] = "HunterBeastMastery",
+        [362] = "HunterSurvival",
+        [363] = "HunterMarksmanship",
+        [381] = "PaladinCombat",
+        [382] = "PaladinHoly",
+        [383] = "PaladinProtection",
+        [398] = "DeathKnightBlood",
+        [399] = "DeathKnightFrost",
+        [400] = "DeathKnightUnholy",
+        [409] = "HunterPetTenacity",
+        [410] = "HunterPetFerocity",
+        [411] = "HunterPetCunning",
+    },
 }
 
 local C = ClasslessUICatalog.classes
