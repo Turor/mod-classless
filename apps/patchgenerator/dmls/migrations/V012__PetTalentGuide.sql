@@ -19,12 +19,12 @@
 -- select * from Faction where name_lang_en_gb like '%Dalaran%';
 -- select * from FactionTemplate join faction on faction.id = FactionTemplate.faction where name_lang_en_gb like '%Dalaran%';
 
-# select id, effect_0,effect_1,effect_2,
-#        effect_aura_0, effect_die_sides_0, effect_base_points_0, implicit_target_a_0, effect_bonus_coefficient_0, effect_chain_amplitude_0, effect_misc_value_0, effect_misc_value_b_0, effect_spell_class_mask_a_0,
-#        effect_aura_1, effect_die_sides_1, effect_base_points_1, implicit_target_a_1, effect_bonus_coefficient_1, effect_chain_amplitude_1, effect_misc_value_1, effect_misc_value_b_1, effect_spell_class_mask_a_1,
-#        effect_aura_2, effect_die_sides_2, effect_base_points_2, implicit_target_a_2, effect_bonus_coefficient_2, effect_chain_amplitude_2, effect_misc_value_2, effect_misc_value_b_2, effect_spell_class_mask_a_2,
-#        name_lang_en_gb, description_lang_en_gb
-# from Spell where id in (53270,19583);
+-- select id, effect_0,effect_1,effect_2,
+--        effect_aura_0, effect_die_sides_0, effect_base_points_0, implicit_target_a_0, effect_bonus_coefficient_0, effect_chain_amplitude_0, effect_misc_value_0, effect_misc_value_b_0, effect_spell_class_mask_a_0,
+--        effect_aura_1, effect_die_sides_1, effect_base_points_1, implicit_target_a_1, effect_bonus_coefficient_1, effect_chain_amplitude_1, effect_misc_value_1, effect_misc_value_b_1, effect_spell_class_mask_a_1,
+--        effect_aura_2, effect_die_sides_2, effect_base_points_2, implicit_target_a_2, effect_bonus_coefficient_2, effect_chain_amplitude_2, effect_misc_value_2, effect_misc_value_b_2, effect_spell_class_mask_a_2,
+--        name_lang_en_gb, description_lang_en_gb
+-- from Spell where id in (53270,19583);
 
 
 update Spell
@@ -33,10 +33,10 @@ set effect_1=6, effect_aura_1 = 107, effect_misc_value_1 = 8, effect_spell_class
     description_lang_en_gb = 'You master the art of Beast training, teaching you the ability to tame Exotic pets and increasing your total pets damage by $s2% and maximum health by $s3%.'
 where id in (53270);
 
-# select SkillLine.display_name_lang_en_gb, spell.name_lang_en_gb, spell.id, SkillLineAbility.* from SkillLineAbility
-# join SkillLine on SkillLine.id = SkillLineAbility.skill_line
-# join Spell on Spell.id = SkillLineAbility.spell
-# where spell.name_lang_en_gb like '%Call%';
+-- select SkillLine.display_name_lang_en_gb, spell.name_lang_en_gb, spell.id, SkillLineAbility.* from SkillLineAbility
+-- join SkillLine on SkillLine.id = SkillLineAbility.skill_line
+-- join Spell on Spell.id = SkillLineAbility.spell
+-- where spell.name_lang_en_gb like '%Call%';
 
 -- To create summoner types remove from attributes ex dismiss pet first from
 -- 688, 697, 712, 691, 30146,

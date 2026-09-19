@@ -1,4 +1,4 @@
-# select * from gtRegenMPPerSpt;
+-- select * from gtRegenMPPerSpt;
 
 update gtRegenMPPerSpt set data = 0.06293699890375137 where ROWID % 100 = 1;
 update gtRegenMPPerSpt set data = 0.05689999833703041 where ROWID % 100 = 2;

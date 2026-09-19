@@ -1,1 +1,1 @@
-select * from gtChanceToMeleeCrit;
+# select * from gtChanceToMeleeCrit;

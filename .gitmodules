@@ -6,10 +6,10 @@
 	url = https://github.com/Turor/wow_dbc.git
 [submodule "apps/aio"]
 	path = apps/aio
-	url = https://github.com/Rochet2/AIO.git
+	url = https://github.com/Turor/AIO.git
 [submodule "apps/transmog"]
 	path = apps/transmog
-	url = https://github.com/DanieltheDeveloper/azerothcore-transmog-3.3.5a.git
+	url = https://github.com/Turor/Transmogrification.git
 [submodule "apps/teleporter"]
 	path = apps/teleporter
-	url = https://github.com/araxiaonline/Teleporter.git
+	url = https://github.com/Turor/TeleportSelector.git

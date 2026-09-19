@@ -1,4 +1,4 @@
- [English](README.md) | [Español](README_ES.md)
+[English](../README.md) | [Español](README_ES.md)
 
 # PARTE 1 - Cómo crear su propio módulo
 

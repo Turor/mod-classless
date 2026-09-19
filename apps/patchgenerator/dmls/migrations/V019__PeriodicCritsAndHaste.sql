@@ -357,22 +357,22 @@ VALUES
         0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0
     );
 
-# delete from spell where id  in (360016,360015,360014,360013,360012,360011,360010,360009,360008,360007);
-#
-# select id,Spell.name_lang_en_gb,Spell.shapeshift_mask_0,Spell.shapeshift_mask_1,Spell.shapeshift_exclude_0,Spell.shapeshift_exclude_1,attributes,attributes_ex, attributes_ex_b, attributes_ex_c, attributes_ex_d, attributes_ex_e, attributes_ex_f, attributes_ex_g
-# from spell where id in (71167, 20042, 360015, 58284,774,25780);
-#
-# select * from spell where id = 20042;
-#
-# select id from spell where (CAST(spell_class_mask_2 AS BIT) & pow(2,28)) = pow(2,28);
+-- delete from spell where id  in (360016,360015,360014,360013,360012,360011,360010,360009,360008,360007);
+--
+-- select id,Spell.name_lang_en_gb,Spell.shapeshift_mask_0,Spell.shapeshift_mask_1,Spell.shapeshift_exclude_0,Spell.shapeshift_exclude_1,attributes,attributes_ex, attributes_ex_b, attributes_ex_c, attributes_ex_d, attributes_ex_e, attributes_ex_f, attributes_ex_g
+-- from spell where id in (71167, 20042, 360015, 58284,774,25780);
+--
+-- select * from spell where id = 20042;
+--
+-- select id from spell where (CAST(spell_class_mask_2 AS BIT) & pow(2,28)) = pow(2,28);
 
 --
-# select id, name_lang_en_gb, name_subtext_lang_en_gb
-# from spell
-# where (effect_aura_0 in (3,8) or effect_aura_1 in (3,8) or effect_aura_2 in (3,8))
-#   and name_subtext_lang_en_gb <> ''
-#   and spell_class_set in (3,4,5,6,7,8,9,10,11,15)
-# order by Spell.spell_class_set,name_lang_en_gb;
+-- select id, name_lang_en_gb, name_subtext_lang_en_gb
+-- from spell
+-- where (effect_aura_0 in (3,8) or effect_aura_1 in (3,8) or effect_aura_2 in (3,8))
+--   and name_subtext_lang_en_gb <> ''
+--   and spell_class_set in (3,4,5,6,7,8,9,10,11,15)
+-- order by Spell.spell_class_set,name_lang_en_gb;
 
 update spell
 set spell_class_mask_2 = spell_class_mask_2 | pow(2,28)
@@ -388,7 +388,7 @@ where (effect_aura_0 in (3,8) or effect_aura_1 in (3,8) or effect_aura_2 in (3,8
 
 
 
-# delete from spell where id  in (360016,360015,360014,360013,360012,360011,360010,360009,360008,360007);
+-- delete from spell where id  in (360016,360015,360014,360013,360012,360011,360010,360009,360008,360007);
 
 insert into talent values(2287,41,0,3,360007,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
                          ),
@@ -413,11 +413,11 @@ insert into talent values(2287,41,0,3,360007,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
 
 -- delete from talent where id in (2287,2288,2289,2290,2291,2292,2293,2294,2295,2296);
 
-# select max(effect_0), id from Spell;
-#
-# select max(id) from Talent;
-# select talenttab.name_lang_en_gb,talent.* from Talent join TalentTab on Talent.tab_id = TalentTab.id group by name_lang_en_gb;
-# select * from Talent join TalentTab on Talent.tab_id = TalentTab.id where Talent.id in (2287,2288,2289,2290,2291,2292,2293,2294,2295,2296);
+-- select max(effect_0), id from Spell;
+--
+-- select max(id) from Talent;
+-- select talenttab.name_lang_en_gb,talent.* from Talent join TalentTab on Talent.tab_id = TalentTab.id group by name_lang_en_gb;
+-- select * from Talent join TalentTab on Talent.tab_id = TalentTab.id where Talent.id in (2287,2288,2289,2290,2291,2292,2293,2294,2295,2296);
 
 -- id starting from 360007
 -- Mage: Fire - spell_class_set=3 - 360007 - 41

@@ -407,16 +407,16 @@ VALUES (
 -- delete from spell where id = 360001;
 -- select * from Spell where name_lang_en_gb = 'Gas Gas Gas!';
 
-# select sl.id,sl.display_name_lang_en_gb,srci.race_mask,srci.class_mask from SkillLine sl
-# join SkillRaceClassInfo srci on sl.id=srci.skill_id;
+-- select sl.id,sl.display_name_lang_en_gb,srci.race_mask,srci.class_mask from SkillLine sl
+-- join SkillRaceClassInfo srci on sl.id=srci.skill_id;
 
-# select sl.id,sl.category_id,sl.display_name_lang_en_gb, s.name_lang_en_gb, sla.*
-# from SkillLine sl
-# join SkillLineAbility sla on sl.id=sla.skill_line
-# join spell s on sla.spell=s.id
-# where sl.id = 183;
-#
-# select * from SkillLineAbility;
+-- select sl.id,sl.category_id,sl.display_name_lang_en_gb, s.name_lang_en_gb, sla.*
+-- from SkillLine sl
+-- join SkillLineAbility sla on sl.id=sla.skill_line
+-- join spell s on sla.spell=s.id
+-- where sl.id = 183;
+--
+-- select * from SkillLineAbility;
 
 insert into SkillLineAbility (id,skill_line,spell,race_mask,class_mask,exclude_race,exclude_class,min_skill_line_rank,superceded_by_spell,acquire_method,trivial_skill_line_rank_high,trivial_skill_line_rank_low,character_points_0,character_points_1)
 values (21981,183,360001,-1,-1,0,0,0,0,2,0,0,0,0);
@@ -1021,4 +1021,4 @@ values (21983,183,360003,690,0,0,0,0,0,2,0,0,0,0);
 
 update spell set name_lang_en_gb = 'Trainers' where id in (360002,360003);
 
-# select name_lang_en_gb from spell where id in (360002,360003);
+-- select name_lang_en_gb from spell where id in (360002,360003);

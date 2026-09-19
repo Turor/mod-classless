@@ -1,8 +1,8 @@
 
 
 
-# select max(id) from spell;
-# select * from spell where id = 34482;
+-- select max(id) from spell;
+-- select * from spell where id = 34482;
 
 INSERT INTO spell (
     id,
@@ -492,16 +492,16 @@ VALUES
      360006,0,0,0,464,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,101,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,0,0,6,6,0,1,1,0,0,0,0,99,99,0,0,0,0,1,1,0,0,0,0,0,0,0,212,268,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,1,0,0,0,0,0,0,0,4096,0,0,473601,-1870130815,1,0,0,0,0,0,63,0,0,'Inner Strength','','','','','','','','','','','','','','','',16712190,'Rank 1','','','','','','','','','','','','','','','',16712190,'Increases your Ranged and Melee Attack Power by $s1% of your Strength.','','','','','','','','','','','','','','','',16712190,'','','','','','','','','','','','','','','','',16712190,0,0,0,0,9,0,0,0,0,0,0,0,1,1,1,0,0,0,0,0,0,1,0,0,0,1,1,0,0,0
     );
 
-# delete from spell where id in (360004,360005,360006);
-# -- Make strength contribute to ranged and melee attack power
-# select max(id) from Spell;
-# select max(id) from Talent;
+-- delete from spell where id in (360004,360005,360006);
+-- -- Make strength contribute to ranged and melee attack power
+-- select max(id) from Spell;
+-- select max(id) from Talent;
 
-# select talenttab.name_lang_en_gb,talent.* from Talent join TalentTab on Talent.tab_id = TalentTab.id;
+-- select talenttab.name_lang_en_gb,talent.* from Talent join TalentTab on Talent.tab_id = TalentTab.id;
 
 insert into talent values(2286,163,0,3,360004,360005,360006,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
                          );
-# delete from talent where id in (2286);
+-- delete from talent where id in (2286);
 
 
 
