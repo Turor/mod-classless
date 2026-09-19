@@ -39,6 +39,84 @@ local function spellLevel(spellId)
     return level
 end
 
+local nameCache = {}
+local familiesByName
+
+local function cachedSpellName(spellId)
+    local cached = nameCache[spellId]
+    if cached ~= nil then
+        if cached == false then
+            return nil
+        end
+        return cached
+    end
+    local name = spellName(spellId)
+    nameCache[spellId] = name or false
+    return name
+end
+
+local function buildFamilies()
+    if familiesByName or not Catalog or not Catalog.spellSet then
+        return
+    end
+    familiesByName = {}
+    for id in pairs(Catalog.spellSet) do
+        local n = cachedSpellName(id)
+        if n then
+            local list = familiesByName[n]
+            if not list then
+                list = {}
+                familiesByName[n] = list
+            end
+            list[#list + 1] = { id = id, level = spellLevel(id) }
+        end
+    end
+    for _, list in pairs(familiesByName) do
+        table.sort(list, function(a, b)
+            if a.level ~= b.level then
+                return a.level < b.level
+            end
+            return a.id < b.id
+        end)
+    end
+end
+
+local function previousRankId(spellId)
+    buildFamilies()
+    local n = cachedSpellName(spellId)
+    local list = n and familiesByName and familiesByName[n]
+    if not list then
+        return nil
+    end
+    for i = 1, #list do
+        if list[i].id == spellId then
+            if i > 1 then
+                return list[i - 1].id
+            end
+            return nil
+        end
+    end
+    return nil
+end
+
+local function inSpellCatalog(spellId)
+    return Catalog and Catalog.spellSet and Catalog.spellSet[spellId]
+end
+
+local function talentOwnsSpell(spellId)
+    if not Catalog or not Catalog.talentById then
+        return false
+    end
+    for _, node in pairs(Catalog.talentById) do
+        for i = 1, #node.r do
+            if node.r[i] == spellId then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function collectLearned(player)
     local learned = {}
     if Catalog and Catalog.spellSet then
@@ -61,64 +139,6 @@ local function collectLearned(player)
     return learned
 end
 
-local function sendState(player)
-    local points = 0
-    if player.GetFreeTalentPoints then
-        points = player:GetFreeTalentPoints() or 0
-    end
-    AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
-        learned = collectLearned(player),
-        points = points,
-    })
-end
-
-function Handlers.RequestState(player)
-    if not player then
-        return
-    end
-    sendState(player)
-end
-
-local function inSpellCatalog(spellId)
-    return Catalog and Catalog.spellSet and Catalog.spellSet[spellId]
-end
-
-function Handlers.LearnSpell(player, spellId)
-    spellId = tonumber(spellId)
-    if type(spellId) ~= "number" or not player then
-        return
-    end
-    if not inSpellCatalog(spellId) then
-        return
-    end
-    local req = spellLevel(spellId)
-    if req > 1 and player:GetLevel() < req then
-        player:SendBroadcastMessage("You are not high enough level for that rank.")
-        return
-    end
-    local name = spellName(spellId)
-    if name and Catalog.spellSet then
-        local previous
-        local prevLevel = -1
-        local thisLevel = spellLevel(spellId)
-        for id in pairs(Catalog.spellSet) do
-            if id ~= spellId and spellName(id) == name then
-                local lvl = spellLevel(id)
-                if lvl < thisLevel and lvl >= prevLevel then
-                    previous = id
-                    prevLevel = lvl
-                end
-            end
-        end
-        if previous and not player:HasSpell(previous) then
-            player:SendBroadcastMessage("Learn the previous rank first.")
-            return
-        end
-    end
-    player:LearnSpell(spellId)
-    sendState(player)
-end
-
 local function treePoints(player, tabId)
     local nodes = Catalog.talents and Catalog.talents[tabId]
     if not nodes then
@@ -135,6 +155,82 @@ local function treePoints(player, tabId)
         spent = spent + rank
     end
     return spent
+end
+
+local function canLearnSpell(player, spellId)
+    if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
+        return false
+    end
+    local req = spellLevel(spellId)
+    if req > 1 and player:GetLevel() < req then
+        return false
+    end
+    local prev = previousRankId(spellId)
+    if prev and not player:HasSpell(prev) then
+        return false
+    end
+    return true
+end
+
+local function collectLearnable(player)
+    local learnable = {}
+    if Catalog and Catalog.spellSet then
+        for spellId in pairs(Catalog.spellSet) do
+            if canLearnSpell(player, spellId) then
+                learnable[spellId] = true
+            end
+        end
+    end
+    return learnable
+end
+
+local function sendState(player)
+    local points = 0
+    if player.GetFreeTalentPoints then
+        points = player:GetFreeTalentPoints() or 0
+    end
+    AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
+        learned = collectLearned(player),
+        learnable = collectLearnable(player),
+        points = points,
+    })
+end
+
+function Handlers.RequestState(player)
+    if not player then
+        return
+    end
+    sendState(player)
+end
+
+function Handlers.LearnSpell(player, spellId)
+    spellId = tonumber(spellId)
+    if type(spellId) ~= "number" or not player then
+        return
+    end
+    if not canLearnSpell(player, spellId) then
+        return
+    end
+    player:LearnSpell(spellId)
+    sendState(player)
+end
+
+function Handlers.CastSpell(player, spellId)
+    spellId = tonumber(spellId)
+    if type(spellId) ~= "number" or not player then
+        return
+    end
+    if not player:HasSpell(spellId) then
+        return
+    end
+    if not inSpellCatalog(spellId) and not talentOwnsSpell(spellId) then
+        return
+    end
+    local target = player:GetSelection()
+    if not target then
+        target = player
+    end
+    player:CastSpell(target, spellId, false)
 end
 
 function Handlers.LearnTalent(player, talentId, rank)

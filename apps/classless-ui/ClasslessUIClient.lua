@@ -25,14 +25,15 @@ local ui = {
     talentButtons = {},
     talentBranchPool = {},
     spellRankSel = {},
-    state = { learned = {}, points = 0 },
+    state = { learned = {}, learnable = {}, points = 0 },
 }
 
 local refreshPanes
 
 local SPELL_ICON = 36
 local SPELL_BORDER = 64
-local SPELL_CELL_W = 96
+local SPELL_ARROW = 24
+local SPELL_CELL_W = 112
 local SPELL_CELL_H = 80
 local SPELL_COLS = 4
 local TALENT_ICON = 32
@@ -153,6 +154,17 @@ local function isKnown(spellId)
         return true
     end
     return false
+end
+
+local function isLearnable(spellId)
+    if not spellId then
+        return false
+    end
+    local t = ui.state.learnable
+    if not t then
+        return false
+    end
+    return t[spellId] or t[tostring(spellId)]
 end
 
 local function talentRank(node)
@@ -335,14 +347,6 @@ local function createSpellButton(index)
     btn:SetSize(SPELL_CELL_W, SPELL_CELL_H)
     btn:EnableMouse(false)
 
-    local prev = CreateFrame("Button", name .. "Prev", btn)
-    prev:SetSize(16, 16)
-    prev:SetPoint("LEFT", 0, 6)
-    prev:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
-    prev:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
-    prev:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Disabled")
-    btn.Prev = prev
-
     local iconBtn = CreateFrame("Button", name .. "Icon", btn)
     iconBtn:SetSize(SPELL_ICON, SPELL_ICON)
     iconBtn:SetPoint("CENTER", 0, 6)
@@ -350,6 +354,14 @@ local function createSpellButton(index)
     iconBtn:RegisterForDrag("LeftButton")
     iconBtn:EnableMouse(true)
     btn.IconBtn = iconBtn
+
+    local prev = CreateFrame("Button", name .. "Prev", btn)
+    prev:SetSize(SPELL_ARROW, SPELL_ARROW)
+    prev:SetPoint("RIGHT", iconBtn, "LEFT", 2, 0)
+    prev:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+    prev:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
+    prev:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Disabled")
+    btn.Prev = prev
 
     local icon = iconBtn:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints(iconBtn)
@@ -371,8 +383,8 @@ local function createSpellButton(index)
     btn.Plus = plus
 
     local next = CreateFrame("Button", name .. "Next", btn)
-    next:SetSize(16, 16)
-    next:SetPoint("RIGHT", 0, 6)
+    next:SetSize(SPELL_ARROW, SPELL_ARROW)
+    next:SetPoint("LEFT", iconBtn, "RIGHT", -2, 0)
     next:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
     next:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
     next:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Disabled")
@@ -396,7 +408,7 @@ local function createSpellButton(index)
 
     local function updatePlus()
         local id = selectedId()
-        if id and not isKnown(id) then
+        if isLearnable(id) then
             plus:Show()
         else
             plus:Hide()
@@ -449,7 +461,7 @@ local function createSpellButton(index)
             pickupSpellId(id)
             return
         end
-        castSpellId(id)
+        AIO.Handle("ClasslessUIServer", "CastSpell", id)
     end)
     iconBtn:SetScript("OnDragStart", function()
         local id = selectedId()
@@ -847,8 +859,18 @@ function Handlers.ApplyState(player, state)
                 end
             end
         end
+        local learnable = {}
+        if type(state.learnable) == "table" then
+            for k, v in pairs(state.learnable) do
+                if v then
+                    local id = tonumber(k) or k
+                    learnable[id] = true
+                end
+            end
+        end
         ui.state = {
             learned = learned,
+            learnable = learnable,
             points = tonumber(state.points) or 0,
         }
     end
