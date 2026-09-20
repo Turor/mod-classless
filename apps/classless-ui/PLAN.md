@@ -23,6 +23,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | spell-gold | Learning a spell rank charges `classless_spell_train_cost.money_cost` (seeded from class `trainer_spell.MoneyCost`). Optional `currency_item_id`/`currency_count` is an item token charged in the same take. Starting spells with no row stay free. Tooltip shows gold. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | spell-cost-cell | Unlearned spell cells show gold (and item currency) under name then rank/passive. Red if the player cannot pay. Known ranks hide the line. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | resource-bar | Live `Interface/AddOns/ClasslessUIAddons/ResourceBar.lua` was the old energy/rage/mana stack (no runes). Restored the patch-n rune grid + runic bar; MainFrame height is 4 bars. | Strip XML from MPQ, N-key hook |
+| 2026-09-19 | aio-resource | Resource bar is AIO `ClasslessResourceBar.lua`. ClasslessUIAddons lua/xml/toc stripped from patch-n; only parchment + bar TGAs remain. Native Linux `mpqcli` packs the MPQ. | N-key hook |
 
 ## Why a new system
 
@@ -49,10 +50,11 @@ Learn ranks one at a time (rank 1, then 2, …). Server rejects a rank if the pr
 
 ```
 modules/mod-classless/apps/classless-ui/
-  PLAN.md                 -- this file
-  Catalog.lua             -- shared class/spec/spell/talent tables
-  ClasslessUIClient.lua   -- AIO.AddAddon client UI
-  ClasslessUIServer.lua   -- AIO.IsMainState handlers
+  PLAN.md                     -- this file
+  Catalog.lua                 -- shared class/spec/spell/talent tables
+  ClasslessUIClient.lua       -- AIO.AddAddon client UI
+  ClasslessUIServer.lua       -- AIO.IsMainState handlers
+  ClasslessResourceBar.lua    -- AIO.AddAddon energy/rage/mana/runic HUD
 ```
 
 Deploy:
@@ -68,7 +70,7 @@ Keep `lua_scripts/AIO_Server` in place. After client-Lua changes, players need `
 
 AIO channels: client `ClasslessUIClient`, server `ClasslessUIServer`.
 
-**Strip the XML wiremock out of `patch-n.mpq`.** Remove `TalentsAndSpellbook.lua` / `.xml` from `ClasslessUIAddons.toc`. Keep `ResourceBar.lua`. Rebuild and publish `patch-n.mpq`. The new UI is AIO-only.
+**ClasslessUIAddons is not a loadable addon.** `/classless` and the resource bar are AIO. `patch-n.mpq` only keeps `Interface/AddOns/ClasslessUIAddons/textures/{SpellbookParchment,normTex,Minimalist}.tga`. `TalentsAndSpellbook.*` and `ClasslessTalentFrameBase.lua` are gone.
 
 ## Frame layout
 

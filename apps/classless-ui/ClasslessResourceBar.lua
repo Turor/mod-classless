@@ -1,4 +1,24 @@
--- this is a UI for displaying energy/rage
+local AIO = AIO or require("AIO")
+if AIO.AddAddon() then
+    return
+end
+
+-- Classless energy/rage/mana/runic HUD. Textures stay in patch-n.mpq under
+-- Interface\AddOns\ClasslessUIAddons\textures (no loadable addon toc).
+if ClasslessResourceFrame then
+    return
+end
+
+AIO.AddSavedVarChar("Energy_Textures")
+AIO.AddSavedVarChar("Energy_ShowText")
+AIO.AddSavedVarChar("Rage_Textures")
+AIO.AddSavedVarChar("Rage_ShowText")
+AIO.AddSavedVarChar("Mana_Textures")
+AIO.AddSavedVarChar("Mana_ShowText")
+AIO.AddSavedVarChar("Runic_Textures")
+AIO.AddSavedVarChar("Runic_ShowText")
+AIO.AddSavedVarChar("ConfigFrame_varis")
+
 
 local FirstTime = true;
 local CLASSLESS_RUNETYPE_BLOOD = 1;
@@ -158,31 +178,29 @@ local function GetRuneTypeForIndex(index)
 end
 
 
-local MainFrame = CreateFrame("Frame","MainFrame",UIParent,nil)
-MainFrame:SetSize(100,80)
-MainFrame:SetPoint("TOPLEFT", 258, -25)
-MainFrame:SetMovable(true)
-MainFrame:EnableMouse(true)
-MainFrame:RegisterForDrag("LeftButton")
-MainFrame:SetClampedToScreen(true)
---MainFrame:SetUserPlaced(true)
-local MainFrameTexture = MainFrame:CreateTexture()
-MainFrameTexture:SetAllPoints(MainFrame)
-MainFrameTexture:SetTexture(.1,.1,.1,1)
-MainFrame:SetScript("OnDragStart", MainFrame.StartMoving)
-MainFrame:SetScript("OnHide", MainFrame.StopMovingOrSizing)
-MainFrame:SetScript("OnDragStop", MainFrame.StopMovingOrSizing)
+local ClasslessResourceFrame = CreateFrame("Frame","ClasslessResourceFrame",UIParent,nil)
+ClasslessResourceFrame:SetSize(100,80)
+ClasslessResourceFrame:SetPoint("TOPLEFT", 258, -25)
+ClasslessResourceFrame:SetMovable(true)
+ClasslessResourceFrame:EnableMouse(true)
+ClasslessResourceFrame:RegisterForDrag("LeftButton")
+ClasslessResourceFrame:SetClampedToScreen(true)
+--ClasslessResourceFrame:SetUserPlaced(true)
+local ClasslessResourceFrameTexture = ClasslessResourceFrame:CreateTexture()
+ClasslessResourceFrameTexture:SetAllPoints(ClasslessResourceFrame)
+ClasslessResourceFrameTexture:SetTexture(.1,.1,.1,1)
+ClasslessResourceFrame:SetScript("OnDragStart", ClasslessResourceFrame.StartMoving)
+ClasslessResourceFrame:SetScript("OnHide", ClasslessResourceFrame.StopMovingOrSizing)
+ClasslessResourceFrame:SetScript("OnDragStop", ClasslessResourceFrame.StopMovingOrSizing)
 	
-MainFrame:Show()
+ClasslessResourceFrame:Show()
 
-MainFrame:RegisterEvent("ADDON_LOADED")
-MainFrame:RegisterEvent("PLAYER_LOGOUT")
 
 
 -- Parent frame
-local ClasslessRuneFrame = CreateFrame("Frame", "ClasslessRuneFrame", MainFrame)
+local ClasslessRuneFrame = CreateFrame("Frame", "ClasslessRuneFrame", ClasslessResourceFrame)
 ClasslessRuneFrame:SetSize(32, 80)
-ClasslessRuneFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", -52, 0)
+ClasslessRuneFrame:SetPoint("TOPLEFT", ClasslessResourceFrame, "TOPLEFT", -52, 0)
 
 ClasslessRuneFrame.runes = {};
 
@@ -350,7 +368,7 @@ ClasslessRuneFrame:Show();
 current_energy = UnitPower("player", 3)
 max_energy = UnitPowerMax("player", 3)
 
-local EnergyFrame = CreateFrame("Frame","EnergyFrame",MainFrame,nil)
+local EnergyFrame = CreateFrame("Frame","EnergyFrame",ClasslessResourceFrame,nil)
 EnergyFrame:SetSize(100,20)
 
 
@@ -410,7 +428,7 @@ end
 current_rage = UnitPower("player",1)
 max_rage = UnitPowerMax("player",1)
 
-local RageFrame = CreateFrame("Frame","RageFrame",MainFrame,nil)
+local RageFrame = CreateFrame("Frame","RageFrame",ClasslessResourceFrame,nil)
 RageFrame:SetSize(100,20)
 
 
@@ -460,7 +478,7 @@ function RageFrame_eventHandler(self, event, ...)
 	end
 end
 
-local RunicFrame = CreateFrame("Frame", "RunicFrame", MainFrame, nil)
+local RunicFrame = CreateFrame("Frame", "RunicFrame", ClasslessResourceFrame, nil)
 RunicFrame:SetSize(100, 20)
 
 RunicStatusBar = CreateFrame("StatusBar", nil, RunicFrame)
@@ -515,7 +533,7 @@ end)
 current_mana = UnitPower("player",0)
 max_mana = UnitPowerMax("player",0)
 
-local ManaFrame = CreateFrame("Frame","ManaFrame",MainFrame,nil)
+local ManaFrame = CreateFrame("Frame","ManaFrame",ClasslessResourceFrame,nil)
 ManaFrame:SetSize(100,20)
 
 
@@ -572,7 +590,7 @@ end
 
 -- below is used for displaying the drop down menu on right click
 
-local DropDownMenu = CreateFrame("Frame","MainFrameDropDownMenu")
+local DropDownMenu = CreateFrame("Frame","ClasslessResourceDropDown")
 DropDownMenu.displayMode = "MENU"
 
 local info = {}
@@ -622,7 +640,7 @@ DropDownMenu.initialize = function(self, level)
 	end
 end
 
-function OnMouseDown_MainFrame(self, button)
+function OnMouseDown_ClasslessResourceFrame(self, button)
 
 	if button == "RightButton" then
 		ToggleDropDownMenu(1, nil, DropDownMenu, self:GetName(), 0, 0)
@@ -630,7 +648,7 @@ function OnMouseDown_MainFrame(self, button)
 
 end
 
-MainFrame:SetScript("OnMouseDown", OnMouseDown_MainFrame)
+ClasslessResourceFrame:SetScript("OnMouseDown", OnMouseDown_ClasslessResourceFrame)
 
 -- below is the config frames
 
@@ -804,7 +822,7 @@ function init_loadUp()
     RunicGSlider:SetValue(Runic_Textures[2] * 100)
     RunicBSlider:SetValue(Runic_Textures[3] * 100)
 
-	MainFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3] * 4 + 2)
+	ClasslessResourceFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3] * 4 + 2)
 	EnergyFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3])
 	EnergyStatusBar:SetHeight(ConfigFrame_varis[3])
 	RageFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3])
@@ -1336,8 +1354,8 @@ local FirstTextChecker = CreateFrame("CheckButton","FirstTextChecker",ConfigFram
 FirstTextChecker:SetPoint("CENTER", -20, -50)
 FirstTextChecker.tooltip = "Whether energy is first or not.\nmay require reload"
 
-function MainFrame:OnEvent(event, arg1)
-	if event == "ADDON_LOADED" and arg1 == "ClasslessUIAddons" then
+local function loadResourceBarSettings()
+	do
 		if Energy_Textures == nil then
 			Energy_Textures = {1,1,0}
 		end
@@ -1417,7 +1435,8 @@ function MainFrame:OnEvent(event, arg1)
 	end
 end
 
-MainFrame:SetScript("OnEvent", MainFrame.OnEvent)
+loadResourceBarSettings()
+
 ManaFrame:SetScript("OnEvent", ManaFrame_eventHandler)
 RageFrame:SetScript("OnEvent", RageFrame_eventHandler)
 EnergyFrame:SetScript("OnEvent", EnergyFrame_eventHandler)
