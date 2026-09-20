@@ -564,6 +564,16 @@ local function histogramLegal(counts)
     return true
 end
 
+local function unspentPetTalentPoints()
+    if GetUnspentTalentPoints then
+        local unspent = tonumber(GetUnspentTalentPoints(false, true))
+        if unspent then
+            return unspent
+        end
+    end
+    return ui.state.petPoints or 0
+end
+
 local function talentChainMet(node, rankOf)
     if not node.p or node.p <= 0 then
         return true
@@ -583,7 +593,7 @@ local function talentIsLearnable(node)
     end
     local points = ui.state.points or 0
     if ui.selectedExtra == "pet" then
-        points = ui.state.petPoints or 0
+        points = unspentPetTalentPoints()
     end
     if points < 1 then
         return false
@@ -2125,7 +2135,7 @@ function refreshPanes()
     local className = ui.selectedGeneral and "General" or (info and info.name or "?")
     local points = ui.state.points or 0
     if ui.selectedExtra == "pet" then
-        points = ui.state.petPoints or 0
+        points = unspentPetTalentPoints()
     end
     if ui.spellPane.PointsOverlay then
         ui.spellPane.PointsOverlay:Hide()
