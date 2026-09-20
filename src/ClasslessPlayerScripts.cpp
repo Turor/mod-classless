@@ -87,16 +87,19 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
                 if (!hasEnoughRank) return true;
             }
 
-        // Unlock is 5 × row points spent anywhere in this tree (Row is 0-based).
+        // Unlock is 5 × row points spent in any player talent tree (Row is 0-based).
         if (!command && talentInfo->Row > 0) {
             uint32 spentPoints = 0;
             for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i) {
                 TalentEntry const* other = sTalentStore.LookupEntry(i);
-                if (!other || other->TalentTab != talentInfo->TalentTab)
+                if (!other)
+                    continue;
+                TalentTabEntry const* otherTab = sTalentTabStore.LookupEntry(other->TalentTab);
+                if (!otherTab || otherTab->petTalentMask)
                     continue;
                 spentPoints += Classless_KnownTalentRank(player, other->TalentID);
             }
-            if (spentPoints < (talentInfo->Row * MAX_TALENT_RANK)) return true;
+            if (spentPoints < (talentInfo->Row * 5)) return true;
         }
 
         uint32 spellId = talentInfo->RankID[talentRank];

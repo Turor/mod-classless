@@ -19,6 +19,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | talent-learn-path | Classless left-click uses `Player:LearnTalent` (addTalent), same as the default panel. Known rank is the highest HasTalent/HasSpell on Talent.dbc RankID, and 1..rank are marked learned so a stock max rank shows as max. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 | 2026-09-19 | talent-plus | Learnable talent ranks show the same green plus as spells. Tree unlock is 5× row points spent anywhere in that tree; arrow prereqs are not required. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 | 2026-09-19 | talent-branches | Stock UI-TalentBranches / UI-TalentArrows drawn from catalog `p`/`pr`. Chains also gate LearnTalent (Lua + C++ DependsOn). Row still needs 5× points in the tree. | Strip XML from MPQ, N-key hook |
+| 2026-09-19 | unlearn-orphan | Unlearn is blocked if it would drop global spent points below 5× a remaining talent's row, or drop a prereq below a dependent's need. Fail sound `igQuestFailed` plus error text. Row unlock counts points in any tree. | Strip XML from MPQ, N-key hook |
 
 ## Why a new system
 

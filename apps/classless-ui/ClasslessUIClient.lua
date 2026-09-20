@@ -403,16 +403,57 @@ local function talentRank(node)
     return rank
 end
 
-local function treePointsForTab(tabId)
-    local nodes = Catalog and Catalog.talents and Catalog.talents[tabId]
-    if not nodes then
-        return 0
+local UNLEARN_BLOCKED_MSG = "Can't unlearn that talent; it would leave a later talent dangling."
+
+local function forEachTalentNode(pet, fn)
+    if not Catalog or not Catalog.talents then
+        return
     end
+    if pet then
+        for _, tabId in ipairs(Catalog.petTabs or { 409, 410, 411 }) do
+            local nodes = Catalog.talents[tabId]
+            if nodes then
+                for i = 1, #nodes do
+                    fn(nodes[i])
+                end
+            end
+        end
+        return
+    end
+    local petSet = {}
+    for _, tabId in ipairs(Catalog.petTabs or { 409, 410, 411 }) do
+        petSet[tabId] = true
+    end
+    for tabId, nodes in pairs(Catalog.talents) do
+        if not petSet[tabId] then
+            for i = 1, #nodes do
+                fn(nodes[i])
+            end
+        end
+    end
+end
+
+local function allTalentPointsSpent()
     local spent = 0
-    for _, node in ipairs(nodes) do
+    forEachTalentNode(ui.selectedExtra == "pet", function(node)
         spent = spent + talentRank(node)
-    end
+    end)
     return spent
+end
+
+local function talentRequirementsMet(node, rankOf, spent)
+    local row = node.t or 0
+    if row > 0 and spent < (row * 5) then
+        return false
+    end
+    if node.p and node.p > 0 then
+        local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
+        local need = (node.pr or 0) + 1
+        if not dep or rankOf(dep) < need then
+            return false
+        end
+    end
+    return true
 end
 
 local function talentIsLearnable(node)
@@ -430,18 +471,46 @@ local function talentIsLearnable(node)
     if points < 1 then
         return false
     end
-    local row = node.t or 0
-    if treePointsForTab(node.tabId) < (row * 5) then
-        return false
+    return talentRequirementsMet(node, talentRank, allTalentPointsSpent())
+end
+
+local function canUnlearnTalent(node)
+    if not node or talentRank(node) < 1 then
+        return false, UNLEARN_BLOCKED_MSG
     end
-    if node.p and node.p > 0 then
-        local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
-        local need = (node.pr or 0) + 1
-        if not dep or talentRank(dep) < need then
-            return false
+    local pet = ui.selectedExtra == "pet"
+    local function rankAfter(n)
+        local r = talentRank(n)
+        if n.id == node.id then
+            r = r - 1
         end
+        return r
+    end
+    local spentAfter = allTalentPointsSpent() - 1
+    local dangling = false
+    forEachTalentNode(pet, function(n)
+        if dangling then
+            return
+        end
+        if rankAfter(n) > 0 and not talentRequirementsMet(n, rankAfter, spentAfter) then
+            dangling = true
+        end
+    end)
+    if dangling then
+        return false, UNLEARN_BLOCKED_MSG
     end
     return true
+end
+
+local function notifyUnlearnBlocked(msg)
+    if PlaySound then
+        PlaySound("igQuestFailed")
+    end
+    if UIErrorsFrame and UIErrorsFrame.AddMessage then
+        UIErrorsFrame:AddMessage(msg, 1.0, 0.1, 0.1, 1.0)
+    else
+        print(msg)
+    end
 end
 
 local function specSpellIds()
@@ -861,6 +930,11 @@ local function createTalentButton(index)
         local maxRank = self.node.r and #self.node.r or 0
         if mouse == "RightButton" then
             if current > 0 then
+                local ok, err = canUnlearnTalent(self.node)
+                if not ok then
+                    notifyUnlearnBlocked(err or UNLEARN_BLOCKED_MSG)
+                    return
+                end
                 AIO.Handle("ClasslessUIServer", "UnlearnTalent", self.node.id, current)
             end
             return

@@ -274,10 +274,82 @@ local function treePointsOn(hasFn, tabId)
     return spent
 end
 
-local function treePoints(player, tabId)
-    return treePointsOn(function(id)
-        return playerHasTalentRank(player, id)
-    end, tabId)
+local UNLEARN_BLOCKED_MSG = "Can't unlearn that talent; it would leave a later talent dangling."
+
+local function forEachTalentNode(pet, fn)
+    if not Catalog or not Catalog.talents then
+        return
+    end
+    if pet then
+        for _, tabId in ipairs(Catalog.petTabs or { 409, 410, 411 }) do
+            local nodes = Catalog.talents[tabId]
+            if nodes then
+                for i = 1, #nodes do
+                    fn(nodes[i])
+                end
+            end
+        end
+        return
+    end
+    local petSet = {}
+    for _, tabId in ipairs(Catalog.petTabs or { 409, 410, 411 }) do
+        petSet[tabId] = true
+    end
+    for tabId, nodes in pairs(Catalog.talents) do
+        if not petSet[tabId] then
+            for i = 1, #nodes do
+                fn(nodes[i])
+            end
+        end
+    end
+end
+
+local function allPointsOn(hasFn, pet)
+    local spent = 0
+    forEachTalentNode(pet, function(node)
+        spent = spent + highestKnownTalentRank(hasFn, node)
+    end)
+    return spent
+end
+
+local function talentRequirementsMet(hasFn, node, rankOf, spent)
+    local row = node.t or 0
+    if row > 0 and spent < (row * 5) then
+        return false
+    end
+    if node.p and node.p > 0 then
+        local dep = Catalog.talentById and Catalog.talentById[node.p]
+        local need = (node.pr or 0) + 1
+        if not dep or rankOf(dep) < need then
+            return false
+        end
+    end
+    return true
+end
+
+local function unlearnWouldOrphan(hasFn, node, pet)
+    local current = highestKnownTalentRank(hasFn, node)
+    if current < 1 then
+        return true, UNLEARN_BLOCKED_MSG
+    end
+    local function rankAfter(n)
+        local r = highestKnownTalentRank(hasFn, n)
+        if n.id == node.id then
+            r = r - 1
+        end
+        return r
+    end
+    local spentAfter = allPointsOn(hasFn, pet) - 1
+    local dangling = false
+    forEachTalentNode(pet, function(n)
+        if dangling then
+            return
+        end
+        if rankAfter(n) > 0 and not talentRequirementsMet(hasFn, n, rankAfter, spentAfter) then
+            dangling = true
+        end
+    end)
+    return dangling, UNLEARN_BLOCKED_MSG
 end
 
 local function canLearnSpell(player, spellId)
@@ -417,8 +489,9 @@ local function talentPrereqsOk(hasFn, node, rank)
         end
     end
     local row = node.t or 0
-    if row > 0 and treePointsOn(hasFn, node.tabId) < (row * 5) then
-        return false, "Not enough points in this tree."
+    local pet = isPetTabId(node.tabId)
+    if row > 0 and allPointsOn(hasFn, pet) < (row * 5) then
+        return false, "Not enough talent points invested."
     end
     return true
 end
@@ -535,6 +608,11 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         if current < 1 then
             return
         end
+        local orphaned, err = unlearnWouldOrphan(hasFn, node, true)
+        if orphaned then
+            player:SendBroadcastMessage(err)
+            return
+        end
         local spellId = node.r[current]
         if pet.UnlearnSpell then
             pet:UnlearnSpell(spellId, current > 1, true)
@@ -552,6 +630,11 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         current = tonumber(player:GetClasslessTalentRank(node.id)) or current
     end
     if current < 1 then
+        return
+    end
+    local orphaned, err = unlearnWouldOrphan(hasFn, node, false)
+    if orphaned then
+        player:SendBroadcastMessage(err)
         return
     end
     local spellId = node.r[current]
