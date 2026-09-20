@@ -21,6 +21,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | talent-branches | Stock UI-TalentBranches / UI-TalentArrows drawn from catalog `p`/`pr`. Chains also gate LearnTalent (Lua + C++ DependsOn). Row still needs 5× points in the tree. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | unlearn-orphan | Unlearn is blocked if it would drop global spent points below 5× a remaining talent's row, or drop a prereq below a dependent's need. Fail sound `igQuestFailed` plus error text. Row unlock counts points in any tree. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | spell-gold | Learning a spell rank charges `classless_spell_train_cost.money_cost` (seeded from class `trainer_spell.MoneyCost`). Optional `currency_item_id`/`currency_count` is an item token charged in the same take. Starting spells with no row stay free. Tooltip shows gold. | Strip XML from MPQ, N-key hook |
+| 2026-09-19 | spell-cost-cell | Unlearned spell cells show gold (and item currency) under name then rank/passive. Red if the player cannot pay. Known ranks hide the line. | Strip XML from MPQ, N-key hook |
 
 ## Why a new system
 

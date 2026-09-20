@@ -96,7 +96,7 @@ local SPELL_ICON = 36
 local SPELL_BORDER = 64
 local SPELL_ARROW = 24
 local SPELL_CELL_W = 112
-local SPELL_CELL_H = 92
+local SPELL_CELL_H = 104
 local TALENT_ICON = 32
 local TALENT_GAP = 63
 local TALENT_OFF_X = 28
@@ -409,6 +409,44 @@ local function spellAltCost(spellId)
         return nil
     end
     return t[spellId] or t[tostring(spellId)]
+end
+
+local function trainCostDisplay(spellId)
+    if not spellId or isKnown(spellId) then
+        return "", 1, 0.82, 0
+    end
+    local copper = spellMoneyCost(spellId)
+    local parts = {}
+    if copper > 0 then
+        if GetCoinTextureString then
+            parts[#parts + 1] = GetCoinTextureString(copper)
+        else
+            parts[#parts + 1] = copper .. "c"
+        end
+    end
+    local alt = spellAltCost(spellId)
+    if type(alt) == "table" then
+        local itemId = tonumber(alt.id)
+        local n = tonumber(alt.n)
+        if itemId and n and n > 0 then
+            local name = GetItemInfo and GetItemInfo(itemId)
+            parts[#parts + 1] = string.format("%dx %s", n, name or ("item:" .. itemId))
+        end
+    end
+    if #parts == 0 then
+        return "", 1, 0.82, 0
+    end
+    local r, g, b = 1, 0.82, 0
+    if copper > 0 and GetMoney and GetMoney() < copper then
+        r, g, b = 1, 0.1, 0.1
+    elseif type(alt) == "table" then
+        local itemId = tonumber(alt.id)
+        local n = tonumber(alt.n)
+        if itemId and n and n > 0 and GetItemCount and GetItemCount(itemId) < n then
+            r, g, b = 1, 0.1, 0.1
+        end
+    end
+    return table.concat(parts, " "), r, g, b
 end
 
 local function addTrainCostToTooltip(spellId)
@@ -829,6 +867,13 @@ local function createSpellButton(index, parent)
     subFs:SetText("")
     btn.SubText = subFs
 
+    local costFs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    costFs:SetPoint("TOP", subFs, "BOTTOM", 0, 0)
+    costFs:SetWidth(SPELL_CELL_W - 4)
+    costFs:SetJustifyH("CENTER")
+    costFs:SetText("")
+    btn.CostText = costFs
+
     local hilight = iconBtn:CreateTexture(nil, "HIGHLIGHT")
     hilight:SetAllPoints(iconBtn)
     hilight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
@@ -1084,6 +1129,22 @@ local function renderSpellbook(ids, pane, pool)
             btn.SubText:SetWidth(cellW - 4)
             btn.SubText:SetText(spellSub or "")
             btn.SubText:Show()
+        end
+        if btn.CostText then
+            btn.CostText:SetWidth(cellW - 4)
+            if compact then
+                btn.CostText:SetText("")
+                btn.CostText:Hide()
+            else
+                local costText, cr, cg, cb = trainCostDisplay(id)
+                btn.CostText:SetText(costText)
+                btn.CostText:SetTextColor(cr, cg, cb)
+                if costText ~= "" then
+                    btn.CostText:Show()
+                else
+                    btn.CostText:Hide()
+                end
+            end
         end
         if compact then
             btn.Prev:Hide()
