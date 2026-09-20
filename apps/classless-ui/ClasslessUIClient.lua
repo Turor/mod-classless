@@ -88,7 +88,7 @@ local ui = {
     talentBranchPool = {},
     talentArrowPool = {},
     spellRankSel = {},
-    state = { learned = {}, learnable = {}, petLearned = {}, petOut = false, points = 0, petPoints = 0 },
+    state = { learned = {}, learnable = {}, petLearned = {}, petLearnable = {}, petReqLevels = {}, petOut = false, points = 0, petPoints = 0 },
 }
 
 local refreshPanes
@@ -333,13 +333,6 @@ local function isKnown(spellId)
         if pet and (pet[spellId] or pet[tostring(spellId)]) then
             return true
         end
-        local learned = ui.state.learned
-        if learned and (learned[spellId] or learned[tostring(spellId)]) then
-            return true
-        end
-        if IsSpellKnown and IsSpellKnown(spellId) then
-            return true
-        end
         return false
     end
     local learned = ui.state.learned
@@ -372,6 +365,16 @@ local function isLearnable(spellId)
     if Catalog and Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
         return false
     end
+    if ui.selectedExtra == "pet" then
+        if not hasPetOut() then
+            return false
+        end
+        local t = ui.state.petLearnable
+        if not t then
+            return false
+        end
+        return t[spellId] or t[tostring(spellId)]
+    end
     local t = ui.state.learnable
     if not t then
         return false
@@ -384,6 +387,9 @@ local function reqLevel(spellId)
         return nil
     end
     local t = ui.state.reqLevels
+    if ui.selectedExtra == "pet" then
+        t = ui.state.petReqLevels
+    end
     if not t then
         return nil
     end
@@ -1049,6 +1055,9 @@ local function createSpellButton(index, parent)
             if isLearnable(id) then
                 AIO.Handle("ClasslessUIServer", "LearnSpell", id)
             end
+            return
+        end
+        if ui.selectedExtra == "pet" then
             return
         end
         if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
@@ -2207,12 +2216,18 @@ function refreshPanes()
     ui.talentPane:Show()
 
     if ui.selectedExtra == "pet" then
-        ui.spellPane.Title:SetText("Pet abilities")
+        ui.spellPane.Title:SetText(hasPetOut() and "Pet abilities" or "Summon a pet")
         ui.talentPane.Title:SetText("Pet talents")
         local petTabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         setPaneTalentArt(ui.talentPane, petTabs[1])
         hidePool(ui.rightSpellButtons, 1)
-        renderSpellbook((Catalog and Catalog.petSpells) or {}, ui.spellPane, ui.spellButtons)
+        local petIds = {}
+        for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
+            if isKnown(id) or isLearnable(id) then
+                petIds[#petIds + 1] = id
+            end
+        end
+        renderSpellbook(petIds, ui.spellPane, ui.spellButtons)
         local tabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         local used = 0
         local totalHeight = 0
@@ -2480,6 +2495,22 @@ function Handlers.ApplyState(player, state)
                 end
             end
         end
+        local petLearnable = {}
+        if type(state.petLearnable) == "table" then
+            for k, v in pairs(state.petLearnable) do
+                if v then
+                    local id = tonumber(k) or k
+                    petLearnable[id] = true
+                end
+            end
+        end
+        local petReqLevels = {}
+        if type(state.petReqLevels) == "table" then
+            for k, v in pairs(state.petReqLevels) do
+                local id = tonumber(k) or k
+                petReqLevels[id] = tonumber(v)
+            end
+        end
         local reqLevels = {}
         if type(state.reqLevels) == "table" then
             for k, v in pairs(state.reqLevels) do
@@ -2513,6 +2544,8 @@ function Handlers.ApplyState(player, state)
             costs = costs,
             altCosts = altCosts,
             petLearned = petLearned,
+            petLearnable = petLearnable,
+            petReqLevels = petReqLevels,
             petOut = state.petOut and true or false,
             points = tonumber(state.points) or 0,
             petPoints = tonumber(state.petPoints) or 0,

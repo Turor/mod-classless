@@ -104,7 +104,7 @@ Lua recreation of stock `Blizzard_GlyphUI.xml` (not a glyph-item list). Native 3
 
 ## Pet pane
 
-Left: pet spells. Right: centralized pet talent tree (`V018__CentralizePetTalentTrees`).
+Left: the **current pet's** abilities (`pet:HasSpell` / `pet:LearnSpell`), not the player's. Right: centralized pet talent tree (`V018__CentralizePetTalentTrees`).
 
 ## Catalog and Spell.dbc
 

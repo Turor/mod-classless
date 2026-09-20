@@ -157,6 +157,20 @@ local function inSpellCatalog(spellId)
     return Catalog and Catalog.spellSet and Catalog.spellSet[spellId]
 end
 
+local petSpellSet
+local function isPetCatalogSpell(spellId)
+    if not spellId then
+        return false
+    end
+    if not petSpellSet then
+        petSpellSet = {}
+        for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
+            petSpellSet[id] = true
+        end
+    end
+    return petSpellSet[spellId] and true or false
+end
+
 local function talentOwnsSpell(spellId)
     if not Catalog or not Catalog.talentById then
         return false
@@ -252,23 +266,89 @@ end
 
 local function collectPetLearned(pet)
     local learned = {}
-    if not pet or not Catalog or not Catalog.petTabs then
+    if not pet then
         return learned
     end
-    for _, tabId in ipairs(Catalog.petTabs) do
-        local nodes = Catalog.talents and Catalog.talents[tabId]
-        if nodes then
-            for _, node in ipairs(nodes) do
-                for i = 1, #node.r do
-                    local spellId = node.r[i]
-                    if unitHasSpell(pet, spellId) then
-                        learned[spellId] = true
+    if Catalog and Catalog.petSpells then
+        for i = 1, #Catalog.petSpells do
+            local spellId = Catalog.petSpells[i]
+            if unitHasSpell(pet, spellId) then
+                learned[spellId] = true
+            end
+        end
+    end
+    if Catalog and Catalog.petTabs then
+        for _, tabId in ipairs(Catalog.petTabs) do
+            local nodes = Catalog.talents and Catalog.talents[tabId]
+            if nodes then
+                for _, node in ipairs(nodes) do
+                    for i = 1, #node.r do
+                        local spellId = node.r[i]
+                        if unitHasSpell(pet, spellId) then
+                            learned[spellId] = true
+                        end
                     end
                 end
             end
         end
     end
     return learned
+end
+
+local function canLearnPetSpell(player, pet, spellId)
+    if not player or not pet or not spellId then
+        return false
+    end
+    if not isPetCatalogSpell(spellId) then
+        return false
+    end
+    if Catalog and Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
+        return false
+    end
+    if unitHasSpell(pet, spellId) then
+        return false
+    end
+    local req = spellLevel(spellId)
+    local level = (pet.GetLevel and pet:GetLevel()) or player:GetLevel()
+    if req > 1 and level < req then
+        return false
+    end
+    local prev = previousRankId(spellId)
+    if prev and not unitHasSpell(pet, prev) then
+        return false
+    end
+    return true
+end
+
+local function collectPetLearnable(player, pet)
+    local learnable = {}
+    if not pet or not Catalog or not Catalog.petSpells then
+        return learnable
+    end
+    for i = 1, #Catalog.petSpells do
+        local spellId = Catalog.petSpells[i]
+        if canLearnPetSpell(player, pet, spellId) then
+            learnable[spellId] = true
+        end
+    end
+    return learnable
+end
+
+local function collectPetReqLevels(player, pet)
+    local req = {}
+    if not pet or not Catalog or not Catalog.petSpells then
+        return req
+    end
+    for i = 1, #Catalog.petSpells do
+        local spellId = Catalog.petSpells[i]
+        if not unitHasSpell(pet, spellId) and not canLearnPetSpell(player, pet, spellId) then
+            local lvl = spellLevel(spellId)
+            if lvl and lvl > 0 then
+                req[spellId] = lvl
+            end
+        end
+    end
+    return req
 end
 
 local function treePointsOn(hasFn, tabId)
@@ -392,6 +472,9 @@ local function canLearnSpell(player, spellId)
         return false
     end
     if Catalog.generalSet and Catalog.generalSet[spellId] then
+        return false
+    end
+    if isPetCatalogSpell(spellId) then
         return false
     end
     if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
@@ -522,6 +605,8 @@ local function sendState(player)
         costs = costs,
         altCosts = altCosts,
         petLearned = collectPetLearned(pet),
+        petLearnable = collectPetLearnable(player, pet),
+        petReqLevels = collectPetReqLevels(player, pet),
         petOut = pet ~= nil,
         points = points,
         petPoints = petPoints,
@@ -545,6 +630,21 @@ function Handlers.LearnSpell(player, spellId)
     end
     spellId = tonumber(spellId)
     if type(spellId) ~= "number" or not player then
+        return
+    end
+    if isPetCatalogSpell(spellId) then
+        local pet = player:GetPet()
+        if not pet then
+            learnFailed(player, "Summon a pet first.")
+            return
+        end
+        if not canLearnPetSpell(player, pet, spellId) then
+            return
+        end
+        if pet.LearnSpell then
+            pet:LearnSpell(spellId)
+        end
+        sendState(player)
         return
     end
     if not canLearnSpell(player, spellId) then
