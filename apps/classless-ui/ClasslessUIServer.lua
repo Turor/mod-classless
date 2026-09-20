@@ -75,19 +75,39 @@ local function cachedSpellName(spellId)
 end
 
 local function buildFamilies()
-    if familiesByName or not Catalog or not Catalog.spellSet then
+    if familiesByName or not Catalog then
         return
     end
     familiesByName = {}
-    for id in pairs(Catalog.spellSet) do
+    local seen = {}
+    local function addId(id)
+        if not id or seen[id] then
+            return
+        end
+        seen[id] = true
         local n = cachedSpellName(id)
-        if n then
-            local list = familiesByName[n]
-            if not list then
-                list = {}
-                familiesByName[n] = list
+        if not n then
+            return
+        end
+        local list = familiesByName[n]
+        if not list then
+            list = {}
+            familiesByName[n] = list
+        end
+        list[#list + 1] = { id = id, level = spellLevel(id) }
+    end
+    if Catalog.spellSet then
+        for id in pairs(Catalog.spellSet) do
+            addId(id)
+        end
+    end
+    -- Talent ranks share names with later trainer ranks; they must sit in
+    -- the chain so rank 2 is not learnable until the talent taught rank 1.
+    if Catalog.talentById then
+        for _, node in pairs(Catalog.talentById) do
+            for i = 1, #node.r do
+                addId(node.r[i])
             end
-            list[#list + 1] = { id = id, level = spellLevel(id) }
         end
     end
     for _, list in pairs(familiesByName) do
@@ -237,6 +257,24 @@ local function canLearnSpell(player, spellId)
     local prev = previousRankId(spellId)
     if prev and not player:HasSpell(prev) then
         return false
+    end
+    -- Talent-taught ranks: only the next rank after what they already have.
+    if talentOwnsSpell(spellId) then
+        local node
+        for _, n in pairs(Catalog.talentById) do
+            for i = 1, #n.r do
+                if n.r[i] == spellId then
+                    node = n
+                    if i > 1 and not player:HasSpell(n.r[i - 1]) then
+                        return false
+                    end
+                    break
+                end
+            end
+            if node then
+                break
+            end
+        end
     end
     return true
 end
