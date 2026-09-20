@@ -561,13 +561,14 @@ local function histogramLegal(counts)
 end
 
 local function unspentPetTalentPoints()
+    local server = ui.state.petPoints or 0
     if GetUnspentTalentPoints then
         local unspent = tonumber(GetUnspentTalentPoints(false, true))
-        if unspent then
+        if unspent and unspent > 0 then
             return unspent
         end
     end
-    return ui.state.petPoints or 0
+    return server
 end
 
 local function talentChainMet(node, rankOf)

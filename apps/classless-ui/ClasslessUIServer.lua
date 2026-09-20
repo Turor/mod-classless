@@ -531,7 +531,21 @@ local function learnFailed(player, msg)
     AIO.Handle(player, "ClasslessUIClient", "LearnFailed", msg)
 end
 
-local function petFreeTalentPoints(pet)
+local function playerTalentPool(player)
+    if not player then
+        return 0
+    end
+    local spent = allPointsOn(function(id)
+        return playerHasTalentRank(player, id)
+    end, false, player)
+    local free = 0
+    if player.GetFreeTalentPoints then
+        free = tonumber(player:GetFreeTalentPoints()) or 0
+    end
+    return spent + free
+end
+
+local function petFreeTalentPoints(player, pet)
     if not pet then
         return 0
     end
@@ -541,7 +555,13 @@ local function petFreeTalentPoints(pet)
     end
     local maxp = 0
     if pet.GetMaxTalentPointsForLevel and pet.GetLevel then
-        maxp = tonumber(pet:GetMaxTalentPointsForLevel(pet:GetLevel())) or 0
+        local ok, v = pcall(pet.GetMaxTalentPointsForLevel, pet, pet:GetLevel())
+        if ok then
+            maxp = tonumber(v) or 0
+        end
+    end
+    if maxp < 1 then
+        maxp = math.floor(playerTalentPool(player) / 3)
     end
     local remain = maxp - used
     if remain < 0 then
@@ -551,10 +571,14 @@ local function petFreeTalentPoints(pet)
     if pet.GetFreeTalentPoints then
         current = tonumber(pet:GetFreeTalentPoints()) or 0
     end
-    if remain ~= current and pet.SetFreeTalentPoints then
+    if maxp > 0 and remain ~= current and pet.SetFreeTalentPoints then
         pet:SetFreeTalentPoints(remain)
+        current = remain
     end
-    return remain
+    if remain > current then
+        return remain
+    end
+    return current
 end
 
 local function sendState(player)
@@ -563,7 +587,7 @@ local function sendState(player)
         points = player:GetFreeTalentPoints() or 0
     end
     local pet = player:GetPet()
-    local petPoints = petFreeTalentPoints(pet)
+    local petPoints = petFreeTalentPoints(player, pet)
     local costs, altCosts = collectTrainCosts(player)
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
@@ -694,7 +718,7 @@ function Handlers.LearnTalent(player, talentId, rank)
             sendState(player)
             return
         end
-        local points = petFreeTalentPoints(pet)
+        local points = petFreeTalentPoints(player, pet)
         if points < 1 then
             player:SendBroadcastMessage("No pet talent points remaining.")
             return
