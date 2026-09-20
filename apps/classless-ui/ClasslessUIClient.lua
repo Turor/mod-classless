@@ -252,9 +252,8 @@ local function createScrollPane(name, parent, title)
     local pane = CreateFrame("Frame", name, parent)
     pane:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 16,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+        tile = true, tileSize = 16,
+        insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
     pane:SetBackdropColor(0.08, 0.08, 0.08, 0.85)
 
@@ -1073,15 +1072,12 @@ local function buildFrame()
         end
     end)
 
-    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOP", 0, -16)
-    title:SetText("Classless")
-
     local close = CreateFrame("Button", "ClasslessUIFrameClose", frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
+    close:SetFrameLevel(frame:GetFrameLevel() + 20)
 
     local sidebar = CreateFrame("Frame", "ClasslessUISidebar", frame)
-    sidebar:SetPoint("TOPRIGHT", -4, -36)
+    sidebar:SetPoint("TOPRIGHT", -4, -8)
     sidebar:SetPoint("BOTTOMRIGHT", -4, 8)
     sidebar:SetWidth(SIDEBAR_W)
     local nav = CreateFrame("Frame", "ClasslessUINav", sidebar)
@@ -1150,19 +1146,19 @@ local function buildFrame()
     y = y - NAV_ROW_H
 
     local body = CreateFrame("Frame", "ClasslessUIBody", frame)
-    body:SetPoint("TOPLEFT", PANE_PAD, -36)
-    body:SetPoint("BOTTOMLEFT", PANE_PAD, PANE_PAD)
-    body:SetPoint("RIGHT", sidebar, "LEFT", -2, 0)
+    body:SetPoint("TOPLEFT", 8, -8)
+    body:SetPoint("BOTTOMLEFT", 8, 8)
+    body:SetPoint("RIGHT", sidebar, "LEFT", 0, 0)
 
     ui.spellPane = createScrollPane("ClasslessUISpellPane", body, "Spells")
     ui.spellPane:SetPoint("TOPLEFT")
     ui.spellPane:SetPoint("BOTTOMLEFT")
-    ui.spellPane:SetPoint("RIGHT", body, "CENTER", -6, 0)
+    ui.spellPane:SetPoint("RIGHT", body, "CENTER", 0, 0)
 
     ui.talentPane = createScrollPane("ClasslessUITalentPane", body, "Talents")
     ui.talentPane:SetPoint("TOPRIGHT")
     ui.talentPane:SetPoint("BOTTOMRIGHT")
-    ui.talentPane:SetPoint("LEFT", body, "CENTER", 6, 0)
+    ui.talentPane:SetPoint("LEFT", body, "CENTER", 0, 0)
 
     frame:SetScript("OnShow", function()
         AIO.Handle("ClasslessUIServer", "RequestState")
