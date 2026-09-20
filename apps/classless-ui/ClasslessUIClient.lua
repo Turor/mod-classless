@@ -814,6 +814,18 @@ local function updateSpellButtonCooldown(btn)
     if not cd then
         return
     end
+    if btn.family and btn.family.petSlot and GetSpellCooldown then
+        local start, duration, enable = GetSpellCooldown(btn.family.petSlot, "pet")
+        if CooldownFrame_SetTimer then
+            CooldownFrame_SetTimer(cd, start or 0, duration or 0, enable or 0)
+        elseif start and start > 0 and duration and duration > 0 then
+            cd:SetCooldown(start, duration)
+            cd:Show()
+        else
+            cd:Hide()
+        end
+        return
+    end
     local id = btn.family and btn.family.ids and btn.family.ids[btn.family.selected]
     if not id or not isKnown(id) then
         cd:Hide()
@@ -950,6 +962,13 @@ local function createSpellButton(index, parent)
     cooldown:Hide()
     btn.Cooldown = cooldown
 
+    local autoCast = iconBtn:CreateTexture(nil, "OVERLAY")
+    autoCast:SetSize(SPELL_ICON + 14, SPELL_ICON + 14)
+    autoCast:SetPoint("CENTER", iconBtn, "CENTER")
+    autoCast:SetTexture("Interface\\Buttons\\UI-AutoCastableOverlay")
+    autoCast:Hide()
+    btn.AutoCastable = autoCast
+
     local plus = iconBtn:CreateTexture(nil, "OVERLAY")
     plus:SetSize(18, 18)
     plus:SetPoint("TOPLEFT", -3, 3)
@@ -1045,6 +1064,14 @@ local function createSpellButton(index, parent)
     end)
 
     iconBtn:SetScript("OnEnter", function(self)
+        if btn.family and btn.family.petSlot then
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            if GameTooltip.SetSpell then
+                GameTooltip:SetSpell(btn.family.petSlot, "pet")
+            end
+            GameTooltip:Show()
+            return
+        end
         local id = selectedId()
         if not id then
             plus:Hide()
@@ -1061,6 +1088,24 @@ local function createSpellButton(index, parent)
         updatePlus()
     end)
     iconBtn:SetScript("OnClick", function(self, mouse)
+        if btn.family and btn.family.petSlot then
+            local slot = btn.family.petSlot
+            if mouse == "RightButton" then
+                if ToggleSpellAutocast then
+                    ToggleSpellAutocast(slot, "pet")
+                end
+                refreshPanes()
+                return
+            end
+            if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
+                PickupSpell(slot, "pet")
+                return
+            end
+            if CastSpell then
+                CastSpell(slot, "pet")
+            end
+            return
+        end
         local id = selectedId()
         if not id then
             return
@@ -1074,9 +1119,6 @@ local function createSpellButton(index, parent)
             end
             return
         end
-        if ui.selectedExtra == "pet" then
-            return
-        end
         if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
             pickupSpellId(id)
             return
@@ -1084,6 +1126,10 @@ local function createSpellButton(index, parent)
         AIO.Handle("ClasslessUIServer", "CastSpell", id)
     end)
     iconBtn:SetScript("OnDragStart", function()
+        if btn.family and btn.family.petSlot then
+            PickupSpell(btn.family.petSlot, "pet")
+            return
+        end
         local id = selectedId()
         if id and isKnown(id) then
             pickupSpellId(id)
@@ -1210,10 +1256,50 @@ local function hidePool(pool, fromIndex)
     end
 end
 
-local function renderSpellbook(ids, pane, pool)
+local function collectPetBookFamilies()
+    local families = {}
+    if not GetSpellName then
+        return families
+    end
+    for slot = 1, 64 do
+        local name, sub = GetSpellName(slot, "pet")
+        if not name then
+            break
+        end
+        if IsPassiveSpell and IsPassiveSpell(slot, "pet") then
+            -- skip passives
+        else
+            local autoAllowed = false
+            if GetSpellAutocast then
+                autoAllowed = GetSpellAutocast(slot, "pet")
+            end
+            local hasRange = SpellHasRange and SpellHasRange(slot, "pet")
+            if autoAllowed or hasRange then
+                local id = nil
+                if GetSpellLink then
+                    local link = GetSpellLink(slot, "pet")
+                    if type(link) == "string" then
+                        id = tonumber(string.match(link, "spell:(%d+)"))
+                    end
+                end
+                families[#families + 1] = {
+                    name = name,
+                    ids = { id or slot },
+                    selected = 1,
+                    icon = GetSpellTexture and GetSpellTexture(slot, "pet") or nil,
+                    petSlot = slot,
+                    sub = sub,
+                }
+            end
+        end
+    end
+    return families
+end
+
+local function renderSpellbook(ids, pane, pool, preFamilies)
     pane = pane or ui.spellPane
     pool = pool or ui.spellButtons
-    local families = groupSpellFamilies(ids or {})
+    local families = preFamilies or groupSpellFamilies(ids or {})
     local compact = ui.selectedGeneral and not ui.selectedExtra
     if compact then
         for _, fam in ipairs(families) do
@@ -1323,6 +1409,24 @@ local function renderSpellbook(ids, pane, pool)
                     btn.Plus:Hide()
                 end
             end
+        end
+        if btn.AutoCastable then
+            btn.AutoCastable:Hide()
+            if fam.petSlot and GetSpellAutocast then
+                local allowed, enabled = GetSpellAutocast(fam.petSlot, "pet")
+                if allowed then
+                    btn.AutoCastable:Show()
+                    if enabled then
+                        btn.AutoCastable:SetVertexColor(1, 1, 1)
+                    else
+                        btn.AutoCastable:SetVertexColor(0.55, 0.55, 0.55)
+                    end
+                end
+            end
+        end
+        if fam.petSlot then
+            btn.Prev:Hide()
+            btn.Next:Hide()
         end
         updateSpellButtonCooldown(btn)
         btn:Show()
@@ -2258,37 +2362,7 @@ function refreshPanes()
         ui.talentPane.Title:SetText(tabName)
         setPaneTalentArt(ui.talentPane, tabs[1])
         hidePool(ui.rightSpellButtons, 1)
-        local petIds = {}
-        local seen = {}
-        local function addPetSpell(id, activatableOnly)
-            if not id or seen[id] or not isKnown(id) then
-                return
-            end
-            if activatableOnly then
-                if IsPassiveSpell and IsPassiveSpell(id) then
-                    return
-                end
-            end
-            seen[id] = true
-            petIds[#petIds + 1] = id
-        end
-        for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
-            addPetSpell(id, false)
-        end
-        for _, tabId in ipairs(tabs) do
-            local nodes = Catalog and Catalog.talents and Catalog.talents[tabId]
-            if nodes then
-                for i = 1, #nodes do
-                    local ranks = nodes[i] and nodes[i].r
-                    if ranks then
-                        for r = 1, #ranks do
-                            addPetSpell(ranks[r], true)
-                        end
-                    end
-                end
-            end
-        end
-        renderSpellbook(petIds, ui.spellPane, ui.spellButtons)
+        renderSpellbook(nil, ui.spellPane, ui.spellButtons, collectPetBookFamilies())
         local used = 0
         local totalHeight = 0
         for _, tabId in ipairs(tabs) do
