@@ -295,62 +295,6 @@ local function collectPetLearned(pet)
     return learned
 end
 
-local function canLearnPetSpell(player, pet, spellId)
-    if not player or not pet or not spellId then
-        return false
-    end
-    if not isPetCatalogSpell(spellId) then
-        return false
-    end
-    if Catalog and Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
-        return false
-    end
-    if unitHasSpell(pet, spellId) then
-        return false
-    end
-    local req = spellLevel(spellId)
-    local level = (pet.GetLevel and pet:GetLevel()) or player:GetLevel()
-    if req > 1 and level < req then
-        return false
-    end
-    local prev = previousRankId(spellId)
-    if prev and not unitHasSpell(pet, prev) then
-        return false
-    end
-    return true
-end
-
-local function collectPetLearnable(player, pet)
-    local learnable = {}
-    if not pet or not Catalog or not Catalog.petSpells then
-        return learnable
-    end
-    for i = 1, #Catalog.petSpells do
-        local spellId = Catalog.petSpells[i]
-        if canLearnPetSpell(player, pet, spellId) then
-            learnable[spellId] = true
-        end
-    end
-    return learnable
-end
-
-local function collectPetReqLevels(player, pet)
-    local req = {}
-    if not pet or not Catalog or not Catalog.petSpells then
-        return req
-    end
-    for i = 1, #Catalog.petSpells do
-        local spellId = Catalog.petSpells[i]
-        if not unitHasSpell(pet, spellId) and not canLearnPetSpell(player, pet, spellId) then
-            local lvl = spellLevel(spellId)
-            if lvl and lvl > 0 then
-                req[spellId] = lvl
-            end
-        end
-    end
-    return req
-end
-
 local function treePointsOn(hasFn, tabId)
     local nodes = Catalog.talents and Catalog.talents[tabId]
     if not nodes then
@@ -587,16 +531,39 @@ local function learnFailed(player, msg)
     AIO.Handle(player, "ClasslessUIClient", "LearnFailed", msg)
 end
 
+local function petFreeTalentPoints(pet)
+    if not pet then
+        return 0
+    end
+    local used = 0
+    if pet.GetUsedTalentCount then
+        used = tonumber(pet:GetUsedTalentCount()) or 0
+    end
+    local maxp = 0
+    if pet.GetMaxTalentPointsForLevel and pet.GetLevel then
+        maxp = tonumber(pet:GetMaxTalentPointsForLevel(pet:GetLevel())) or 0
+    end
+    local remain = maxp - used
+    if remain < 0 then
+        remain = 0
+    end
+    local current = 0
+    if pet.GetFreeTalentPoints then
+        current = tonumber(pet:GetFreeTalentPoints()) or 0
+    end
+    if remain ~= current and pet.SetFreeTalentPoints then
+        pet:SetFreeTalentPoints(remain)
+    end
+    return remain
+end
+
 local function sendState(player)
     local points = 0
     if player.GetFreeTalentPoints then
         points = player:GetFreeTalentPoints() or 0
     end
     local pet = player:GetPet()
-    local petPoints = 0
-    if pet and pet.GetFreeTalentPoints then
-        petPoints = pet:GetFreeTalentPoints() or 0
-    end
+    local petPoints = petFreeTalentPoints(pet)
     local costs, altCosts = collectTrainCosts(player)
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
@@ -605,8 +572,6 @@ local function sendState(player)
         costs = costs,
         altCosts = altCosts,
         petLearned = collectPetLearned(pet),
-        petLearnable = collectPetLearnable(player, pet),
-        petReqLevels = collectPetReqLevels(player, pet),
         petOut = pet ~= nil,
         points = points,
         petPoints = petPoints,
@@ -633,18 +598,6 @@ function Handlers.LearnSpell(player, spellId)
         return
     end
     if isPetCatalogSpell(spellId) then
-        local pet = player:GetPet()
-        if not pet then
-            learnFailed(player, "Summon a pet first.")
-            return
-        end
-        if not canLearnPetSpell(player, pet, spellId) then
-            return
-        end
-        if pet.LearnSpell then
-            pet:LearnSpell(spellId)
-        end
-        sendState(player)
         return
     end
     if not canLearnSpell(player, spellId) then
@@ -741,10 +694,7 @@ function Handlers.LearnTalent(player, talentId, rank)
             sendState(player)
             return
         end
-        local points = 0
-        if pet.GetFreeTalentPoints then
-            points = pet:GetFreeTalentPoints() or 0
-        end
+        local points = petFreeTalentPoints(pet)
         if points < 1 then
             player:SendBroadcastMessage("No pet talent points remaining.")
             return
