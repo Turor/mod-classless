@@ -2847,3 +2847,8 @@ function ToggleTalentFrame(...)
         return orig(...)
     end
 end
+
+_G.ClasslessUI_Toggle = toggleClasslessFrame
+_G.ClasslessUI_Show = function()
+    Handlers.ShowUI()
+end

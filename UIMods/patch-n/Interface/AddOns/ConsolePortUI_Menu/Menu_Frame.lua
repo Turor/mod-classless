@@ -113,7 +113,7 @@ local Menu =  UI:CreateFrame('Frame', an, IsCustomClient and EscapeMenu or GameM
 					ID 		= 3,
 					Point 	= {'TOP', 'parent.Inventory', 'BOTTOM', 0, 0},
 					Desc	= TALENTS_BUTTON,
-					RefTo 	= TalentMicroButton,
+					RefTo 	= ClasslessUITalentMicroProxy or TalentMicroButton,
 					Attrib 	= {hidemenu = true},
 					EvaluateAlertVisibility = function(self)
 						-- If we just unspecced, and we have unspent talent points, it's probably spec-specific talents that were just wiped.  Show the tutorial box.
@@ -200,7 +200,7 @@ local Menu =  UI:CreateFrame('Frame', an, IsCustomClient and EscapeMenu or GameM
 					Point 	= {'TOP', 'parent.Spec', 'BOTTOM', 0, 0},
 					Desc	= SPELLBOOK_BUTTON,
 					Img 	= [[Interface\Spellbook\Spellbook-Icon]],
-					RefTo 	= SpellbookMicroButton,
+					RefTo 	= ClasslessUISpellbookMicroProxy or SpellbookMicroButton,
 					Attrib 	= {hidemenu = true},
 				}, 
 				Totem  = {
