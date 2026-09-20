@@ -236,7 +236,13 @@ local function setPaneTalentArt(pane, tabId)
     local bg = Catalog and Catalog.tabBg and tabId and Catalog.tabBg[tabId]
     if not bg then
         q.holder:Hide()
+        if pane.PaperHold then
+            pane.PaperHold:Show()
+        end
         return
+    end
+    if pane.PaperHold then
+        pane.PaperHold:Hide()
     end
     local base = "Interface\\TalentFrame\\" .. bg .. "-"
     q.TL:SetTexture(base .. "TopLeft")
@@ -258,7 +264,17 @@ local function createScrollPane(name, parent, title)
         tile = true, tileSize = 16,
         insets = { left = 0, right = 0, top = 0, bottom = 0 },
     })
-    pane:SetBackdropColor(0.08, 0.08, 0.08, 0.85)
+    pane:SetBackdropColor(0, 0, 0, 0)
+
+    local paperHold = CreateFrame("Frame", nil, pane)
+    paperHold:SetAllPoints(pane)
+    paperHold:SetFrameLevel(pane:GetFrameLevel())
+    local paper = paperHold:CreateTexture(nil, "BACKGROUND")
+    paper:SetAllPoints(paperHold)
+    paper:SetTexture("Interface\\AddOns\\ClasslessUIAddons\\textures\\SpellbookParchment")
+    paper:SetAllPoints(paperHold)
+    pane.Paper = paper
+    pane.PaperHold = paperHold
 
     local titleFs = pane:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     titleFs:SetPoint("TOP", 0, -8)
@@ -415,14 +431,33 @@ local function groupSpellFamilies(ids)
         end
     end
     for _, fam in ipairs(families) do
-        table.sort(fam.ids)
-        local highestKnown = 1
+        table.sort(fam.ids, function(a, b)
+            local function rankKey(id)
+                local _, rank = GetSpellInfo(id)
+                if rank then
+                    local n = tonumber(string.match(rank, "(%d+)"))
+                    if n then
+                        return n
+                    end
+                end
+                local req = reqLevel(id)
+                if req then
+                    return req
+                end
+                return id
+            end
+            return rankKey(a) < rankKey(b)
+        end)
+        local highestKnown = 0
         for i, id in ipairs(fam.ids) do
             if isKnown(id) then
                 highestKnown = i
             end
         end
-        local selected = ui.spellRankSel[fam.name] or highestKnown
+        local selected = ui.spellRankSel[fam.name]
+        if not selected then
+            selected = (highestKnown > 0) and highestKnown or 1
+        end
         if selected < 1 then
             selected = 1
         elseif selected > #fam.ids then
