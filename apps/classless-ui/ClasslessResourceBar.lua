@@ -1,4 +1,86 @@
 local AIO = AIO or require("AIO")
+
+-- Server: the 3.3.5 client only updates GetRuneCooldown for UnitClass DK.
+-- Classless IsClass(ABILITY) already inits runes for every class, so remaining
+-- CD is pushed from the server.
+if AIO.IsMainState and AIO.IsMainState() then
+    local lastRuneKey = {}
+
+    local function runeReadyBit(mask, i)
+        mask = tonumber(mask) or 0
+        local bitv = 2 ^ (i - 1)
+        return (math.floor(mask / bitv) % 2) == 1
+    end
+
+    local function pushRuneCooldowns(player)
+        if not player then
+            return
+        end
+        local cds = {}
+        local keyParts = {}
+        local mask
+        if player.GetRunesState then
+            local ok, value = pcall(function()
+                return player:GetRunesState()
+            end)
+            if ok then
+                mask = value
+            end
+        end
+        for i = 1, 6 do
+            local ms = 0
+            if player.GetRuneCooldown then
+                ms = tonumber(player:GetRuneCooldown(i)) or 0
+            elseif mask ~= nil then
+                ms = runeReadyBit(mask, i) and 0 or 10000
+            else
+                return
+            end
+            cds[i] = ms
+            keyParts[i] = (ms > 50) and 1 or 0
+        end
+        local guid = player.GetGUIDLow and player:GetGUIDLow() or tostring(player)
+        local key = table.concat(keyParts, "")
+        if lastRuneKey[guid] == key then
+            return
+        end
+        lastRuneKey[guid] = key
+        AIO.Handle(player, "ClasslessResourceBar", "ApplyRuneCooldowns", cds)
+    end
+
+    local ServerBar = AIO.AddHandlers("ClasslessResourceBar", {})
+    function ServerBar.RequestRuneCooldowns(player)
+        if player then
+            lastRuneKey[player.GetGUIDLow and player:GetGUIDLow() or tostring(player)] = nil
+            pushRuneCooldowns(player)
+        end
+    end
+
+    if RegisterPlayerEvent then
+        RegisterPlayerEvent(3, function(_, player)
+            pushRuneCooldowns(player)
+        end)
+        RegisterPlayerEvent(4, function(_, player)
+            if player and player.GetGUIDLow then
+                lastRuneKey[player:GetGUIDLow()] = nil
+            end
+        end)
+        RegisterPlayerEvent(5, function(_, player)
+            pushRuneCooldowns(player)
+        end)
+    end
+    if CreateLuaEvent then
+        CreateLuaEvent(function()
+            if not GetPlayersInWorld then
+                return
+            end
+            for _, player in pairs(GetPlayersInWorld()) do
+                pushRuneCooldowns(player)
+            end
+        end, 200, 0)
+    end
+end
+
 if AIO.AddAddon() then
     return
 end
@@ -7,6 +89,39 @@ end
 -- Interface\AddOns\ClasslessUIAddons\textures (no loadable addon toc).
 if ClasslessResourceFrame then
     return
+end
+
+local ResourceBar = AIO.AddHandlers("ClasslessResourceBar", {})
+local pendingRuneCds
+
+local function applyRuneCooldownMs(i, remMs)
+    local btn = ClasslessRunes and ClasslessRunes[i]
+    if not btn or not btn.cooldown then
+        return
+    end
+    remMs = tonumber(remMs) or 0
+    if remMs > 50 then
+        local rem = remMs / 1000
+        local total = math.max(10, rem)
+        btn.cooldown:SetCooldown(GetTime() - (total - rem), total)
+        btn.cooldown:Show()
+    else
+        btn.cooldown:Hide()
+    end
+end
+
+local function applyPendingRuneCds()
+    if type(pendingRuneCds) ~= "table" then
+        return
+    end
+    for i = 1, 6 do
+        applyRuneCooldownMs(i, pendingRuneCds[i] or pendingRuneCds[tostring(i)])
+    end
+end
+
+function ResourceBar.ApplyRuneCooldowns(player, cds)
+    pendingRuneCds = cds
+    applyPendingRuneCds()
 end
 
 AIO.AddSavedVarChar("Energy_Textures")
@@ -73,20 +188,32 @@ function ClasslessRuneButton_OnLoad (self)
 end
 
 function ClasslessRuneButton_OnUpdate (self, elapsed)
+	-- Server-pushed remaining ms is the classless source of truth (every class).
+	if pendingRuneCds then
+		self:SetScript("OnUpdate", nil);
+		return
+	end
 	local cooldown = self.cooldown or _G[self:GetName().."Cooldown"];
 	if not GetRuneCooldown then
 		self:SetScript("OnUpdate", nil);
 		return
 	end
 	local start, duration, runeReady = GetRuneCooldown(self:GetID());
+	start = tonumber(start) or 0
+	duration = tonumber(duration) or 0
 	local displayCooldown = (runeReady and 0) or 1;
-	if CooldownFrame_SetTimer then
-		CooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
-	else
-		ClasslessCooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
-	end
-
-	if ( runeReady ) then
+	if start > 0 and duration > 0 and displayCooldown > 0 then
+		if CooldownFrame_SetTimer then
+			CooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+		else
+			ClasslessCooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+		end
+	elseif runeReady then
+		if CooldownFrame_SetTimer then
+			CooldownFrame_SetTimer(cooldown, 0, 0, 0);
+		else
+			ClasslessCooldownFrame_SetTimer(cooldown, 0, 0, 0);
+		end
 		self:SetScript("OnUpdate", nil);
 	end
 end
@@ -389,6 +516,8 @@ ClasslessRuneFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 ClasslessRuneFrame:SetScript("OnEvent", ClasslessRuneFrame_OnEvent);
 ClasslessRuneFrame:Show();
 syncClasslessRuneCooldowns(ClasslessRuneFrame)
+applyPendingRuneCds()
+AIO.Handle("ClasslessResourceBar", "RequestRuneCooldowns")
 
 
 

@@ -21,8 +21,11 @@ void ClasslessPlayerScripts::SetTalentYieldAchievements(std::unordered_set<uint3
 }
 
 void ClasslessPlayerScripts::OnPlayerLogin(Player *player) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false))
+    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
         ChatHandler(player->GetSession()).PSendSysMessage(HELLO_WORLD);
+        if (player && !player->m_runes)
+            player->InitRunes();
+    }
 }
 
 Optional<bool> ClasslessPlayerScripts::OnPlayerIsClass(Player const *, Classes classes, ClassContext context) {
