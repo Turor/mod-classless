@@ -977,7 +977,7 @@ local function buildFrame()
     frame:SetResizable(true)
     if frame.SetMinResize then
         frame:SetMinResize(800, 520)
-        frame:SetMaxResize(1600, 1100)
+        frame:SetMaxResize(FRAME_W, FRAME_H)
     end
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
