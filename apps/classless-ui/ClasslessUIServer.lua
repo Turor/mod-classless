@@ -181,30 +181,7 @@ local function highestKnownTalentRank(hasFn, node)
     return rank
 end
 
--- Talent ranks live in m_spells with GetTalentSpellCost > 0, so RemoveSpell
--- only clears specMask (not PLAYERSPELL_REMOVED). LearnSpell(previous) then
--- sees the dropped rank as "next in chain, not in spec" and re-learns it.
--- Strip that relearn, then recast the previous rank so its aura comes back.
-local function dropTalentRank(unit, node, rank, learnFn, removeFn, hasFn)
-    local spellId = node.r[rank]
-    if not spellId or not hasFn(spellId) then
-        return false
-    end
-    removeFn(spellId)
-    local prevId = rank > 1 and node.r[rank - 1] or nil
-    if prevId then
-        if not hasFn(prevId) and learnFn then
-            learnFn(prevId)
-        end
-        if hasFn(spellId) then
-            removeFn(spellId)
-        end
-        if unit and unit.CastSpell and hasFn(prevId) then
-            unit:CastSpell(unit, prevId, true)
-        end
-    end
-    return not hasFn(spellId)
-end
+
 
 local function collectLearned(player)
     local learned = {}
@@ -532,19 +509,6 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         elseif pet.RemoveSpell then
             pet:RemoveSpell(spellId, current > 1, true)
         end
-        if hasFn(spellId) then
-            dropTalentRank(pet, node, current, function(id)
-                if pet.LearnSpell then
-                    pet:LearnSpell(id)
-                end
-            end, function(id)
-                if pet.RemoveSpell then
-                    pet:RemoveSpell(id)
-                end
-            end, hasFn)
-        end
-        local points = pet:GetFreeTalentPoints() or 0
-        pet:SetFreeTalentPoints(points + 1)
         sendState(player)
         return
     end
@@ -555,11 +519,13 @@ function Handlers.UnlearnTalent(player, talentId, rank)
     if current < 1 then
         return
     end
-    local dropped = dropTalentRank(player, node, current, function(id)
-        player:LearnSpell(id)
-    end, function(id)
-        player:RemoveSpell(id)
-    end, hasFn)
+    local spellId = node.r[current]
+    local prevId = current > 1 and node.r[current - 1] or 0
+    if not player.DropTalentRank then
+        player:SendBroadcastMessage("Talent unlearn is unavailable (server needs a rebuild).")
+        return
+    end
+    local dropped = player:DropTalentRank(spellId, prevId or 0)
     if not dropped then
         return
     end

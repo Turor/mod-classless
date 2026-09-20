@@ -1,0 +1,118 @@
+#include "ClasslessTalent.h"
+
+#include "Config.h"
+#include "DBCStores.h"
+#include "Opcodes.h"
+#include "Player.h"
+#include "SpellAuraEffects.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
+#include "WorldPacket.h"
+
+static void ErasePlayerSpell(Player* player, uint32 spellId)
+{
+    PlayerSpellMap& spells = player->GetSpellMap();
+    auto itr = spells.find(spellId);
+    if (itr == spells.end() || itr->second->State == PLAYERSPELL_REMOVED)
+        return;
+
+    player->RemoveOwnedAura(spellId);
+
+    if (SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId))
+    {
+        for (uint8 i = 0; i < MAX_SPELL_EFFECTS; ++i)
+        {
+            if (info->Effects[i].TriggerSpell)
+                player->RemoveAurasDueToSpell(info->Effects[i].TriggerSpell);
+        }
+    }
+
+    if (itr->second->State == PLAYERSPELL_NEW || itr->second->State == PLAYERSPELL_TEMPORARY)
+    {
+        delete itr->second;
+        spells.erase(itr);
+    }
+    else
+    {
+        itr->second->State = PLAYERSPELL_REMOVED;
+        itr->second->specMask = 0;
+        itr->second->Active = false;
+    }
+
+    player->SendLearnPacket(spellId, false);
+}
+
+static void ActivatePlayerSpell(Player* player, uint32 spellId)
+{
+    PlayerSpellMap& spells = player->GetSpellMap();
+    uint8 specMask = player->GetActiveSpecMask();
+    auto itr = spells.find(spellId);
+
+    if (itr == spells.end())
+    {
+        PlayerSpell* spell = new PlayerSpell();
+        spell->State = PLAYERSPELL_NEW;
+        spell->Active = true;
+        spell->specMask = specMask;
+        spells[spellId] = spell;
+    }
+    else
+    {
+        if (itr->second->State == PLAYERSPELL_REMOVED)
+            itr->second->State = PLAYERSPELL_CHANGED;
+        else if (itr->second->State != PLAYERSPELL_NEW && itr->second->State != PLAYERSPELL_TEMPORARY)
+            itr->second->State = PLAYERSPELL_CHANGED;
+        itr->second->Active = true;
+        itr->second->specMask |= specMask;
+    }
+
+    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId);
+    if (info && (info->IsPassive() || (info->HasAttribute(SPELL_ATTR0_DO_NOT_DISPLAY) && info->Stances)))
+    {
+        if (player->IsNeedCastPassiveSpellAtLearn(info))
+            player->CastSpell(player, spellId, true);
+    }
+
+    player->SendLearnPacket(spellId, true);
+
+    if (!info || info->IsStackableWithRanks() || !info->IsRanked())
+        return;
+
+    for (SpellInfo const* prev = info->GetPrevRankSpell(); prev; prev = prev->GetPrevRankSpell())
+    {
+        auto pit = spells.find(prev->Id);
+        if (pit == spells.end() || pit->second->State == PLAYERSPELL_REMOVED || !pit->second->Active)
+            continue;
+        pit->second->Active = false;
+        if (pit->second->State != PLAYERSPELL_NEW && pit->second->State != PLAYERSPELL_TEMPORARY)
+            pit->second->State = PLAYERSPELL_CHANGED;
+        WorldPacket data(SMSG_SUPERCEDED_SPELL, 4 + 4);
+        data << uint32(prev->Id);
+        data << uint32(spellId);
+        player->SendDirectMessage(&data);
+    }
+}
+
+bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpellId)
+{
+    if (!player || !dropSpellId || dropSpellId == keepSpellId)
+        return false;
+    if (!sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false))
+        return false;
+
+    ErasePlayerSpell(player, dropSpellId);
+
+    uint32 nextId = sSpellMgr->GetNextSpellInChain(dropSpellId);
+    while (nextId && nextId != keepSpellId)
+    {
+        if (!GetTalentSpellPos(nextId))
+            break;
+        ErasePlayerSpell(player, nextId);
+        nextId = sSpellMgr->GetNextSpellInChain(nextId);
+    }
+
+    if (keepSpellId)
+        ActivatePlayerSpell(player, keepSpellId);
+
+    return !player->HasSpell(dropSpellId);
+}
