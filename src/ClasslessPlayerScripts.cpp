@@ -1,4 +1,5 @@
 #include "ClasslessPlayerScripts.h"
+#include "ClasslessTalent.h"
 #include "Player.h"
 #include "Config.h"
 #include "Chat.h"
@@ -65,14 +66,8 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
         TalentTabEntry const *talentTabInfo = sTalentTabStore.LookupEntry(talentInfo->TalentTab);
         if (!talentTabInfo) return true;
 
-        if ((player->getClassMask() & talentTabInfo->ClassMask) == 0) return true;
-
-        uint32 currentTalentRank = 0;
-        for (uint8 rank = 0; rank < MAX_TALENT_RANK; ++rank)
-            if (talentInfo->RankID[rank] && player->HasTalent(talentInfo->RankID[rank], player->GetActiveSpec())) {
-                currentTalentRank = rank + 1;
-                break;
-            }
+        // Classless: other-class trees are valid. Do not swallow the learn.
+        uint32 currentTalentRank = Classless_KnownTalentRank(player, talentId);
 
         if (currentTalentRank >= talentRank + 1) return true;
 
@@ -83,23 +78,22 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
             if (TalentEntry const *depTalentInfo = sTalentStore.LookupEntry(talentInfo->DependsOn)) {
                 bool hasEnoughRank = false;
                 for (uint8 rank = talentInfo->DependsOnRank; rank < MAX_TALENT_RANK; rank++)
-                    if (depTalentInfo->RankID[rank] && player->HasTalent(depTalentInfo->RankID[rank],
-                                                                         player->GetActiveSpec())) {
+                    if (depTalentInfo->RankID[rank] &&
+                        (player->HasTalent(depTalentInfo->RankID[rank], player->GetActiveSpec()) ||
+                         player->HasSpell(depTalentInfo->RankID[rank]))) {
                         hasEnoughRank = true;
                         break;
-                                                                         }
+                    }
                 if (!hasEnoughRank) return true;
             }
 
-        if (!command) {
+        if (!command && talentInfo->Row > 0) {
             uint32 spentPoints = 0;
-            if (talentInfo->Row > 0) {
-                const PlayerTalentMap &talentMap = player->GetTalentMap();
-                for (auto const &it: talentMap)
-                    if (TalentSpellPos const *pos = GetTalentSpellPos(it.first))
-                        if (sTalentStore.LookupEntry(pos->talent_id))
-                            if (it.second->State != PLAYERSPELL_REMOVED && it.second->IsInSpec(player->GetActiveSpec()))
-                                spentPoints += pos->rank + 1;
+            for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i) {
+                TalentEntry const* other = sTalentStore.LookupEntry(i);
+                if (!other || other->TalentTab != talentInfo->TalentTab)
+                    continue;
+                spentPoints += Classless_KnownTalentRank(player, other->TalentID);
             }
             if (spentPoints < (talentInfo->Row * MAX_TALENT_RANK)) return true;
         }

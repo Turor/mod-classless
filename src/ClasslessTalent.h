@@ -8,3 +8,6 @@ class Player;
 // including higher talent ranks still sitting in the chain, then restore
 // keepSpellId without Player::learnSpell re-teaching the dropped rank.
 bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpellId);
+
+// Highest known rank (1-based) from HasTalent or HasSpell on Talent.dbc RankID[].
+uint32 Classless_KnownTalentRank(Player* player, uint32 talentId);

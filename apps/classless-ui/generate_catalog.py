@@ -112,7 +112,8 @@ def main():
         if len(row) < 23:
             continue
         tid, tab, tier, col = row[0], row[1], row[2], row[3]
-        ranks = [x for x in row[4:13] if x]
+        # In-game Talent.dbc RankID is MAX_TALENT_RANK=5 (spell_rank_0..4).
+        ranks = [x for x in row[4:9] if x]
         if not ranks:
             continue
         for sid in ranks:

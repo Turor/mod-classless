@@ -214,10 +214,19 @@ local function collectLearned(player)
     if Catalog and Catalog.talentById then
         for _, node in pairs(Catalog.talentById) do
             if not isPetTabId(node.tabId) then
-                for i = 1, #node.r do
-                    local spellId = node.r[i]
-                    if playerHasTalentRank(player, spellId) then
-                        learned[spellId] = true
+                local rank = 0
+                if player.GetClasslessTalentRank then
+                    rank = tonumber(player:GetClasslessTalentRank(node.id)) or 0
+                else
+                    rank = highestKnownTalentRank(function(id)
+                        return playerHasTalentRank(player, id)
+                    end, node)
+                end
+                -- Stock LearnTalent only keeps the current rank in m_talents.
+                -- Mark 1..rank so the classless tree shows the true current rank.
+                for i = 1, rank do
+                    if node.r[i] then
+                        learned[node.r[i]] = true
                     end
                 end
             end
@@ -495,8 +504,13 @@ function Handlers.LearnTalent(player, talentId, rank)
         sendState(player)
         return
     end
-    player:LearnSpell(spellId)
-    player:SetFreeTalentPoints(points - 1)
+    -- Same path as the default talent frame: Player::LearnTalent → addTalent.
+    if player.LearnTalent then
+        player:LearnTalent(talentId, rank - 1)
+    else
+        player:LearnSpell(spellId)
+        player:SetFreeTalentPoints(points - 1)
+    end
     sendState(player)
 end
 
@@ -535,6 +549,9 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         return playerHasTalentRank(player, id)
     end
     local current = highestKnownTalentRank(hasFn, node)
+    if player.GetClasslessTalentRank then
+        current = tonumber(player:GetClasslessTalentRank(node.id)) or current
+    end
     if current < 1 then
         return
     end

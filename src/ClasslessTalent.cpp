@@ -2,6 +2,7 @@
 
 #include "Config.h"
 #include "DBCStores.h"
+#include "DBCStructure.h"
 #include "Opcodes.h"
 #include "Player.h"
 #include "SpellAuraEffects.h"
@@ -126,4 +127,25 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
     player->SendTalentsInfoData(false);
 
     return !player->HasSpell(dropSpellId) && !player->HasTalent(dropSpellId, player->GetActiveSpec());
+}
+
+uint32 Classless_KnownTalentRank(Player* player, uint32 talentId)
+{
+    if (!player || !talentId)
+        return 0;
+
+    TalentEntry const* info = sTalentStore.LookupEntry(talentId);
+    if (!info)
+        return 0;
+
+    uint32 rank = 0;
+    for (uint8 i = 0; i < MAX_TALENT_RANK; ++i)
+    {
+        uint32 spellId = info->RankID[i];
+        if (!spellId)
+            continue;
+        if (player->HasTalent(spellId, player->GetActiveSpec()) || player->HasSpell(spellId))
+            rank = i + 1;
+    }
+    return rank;
 }
