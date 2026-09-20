@@ -524,6 +524,24 @@ local function collectTrainCosts(player)
     return costs, alt
 end
 
+local function persistPlayer(player)
+    if not player then
+        return
+    end
+    if player.RequestSpellSave then
+        player:RequestSpellSave()
+    elseif player.SaveToDB then
+        player:SaveToDB()
+    end
+end
+
+local function persistPet(player)
+    local pet = player and player.GetPet and player:GetPet()
+    if pet and pet.SavePetToDB then
+        pet:SavePetToDB(0)
+    end
+end
+
 local function learnFailed(player, msg)
     if player.SendBroadcastMessage then
         player:SendBroadcastMessage(msg)
@@ -666,6 +684,7 @@ function Handlers.LearnSpell(player, spellId)
         end
     end
     player:LearnSpell(spellId)
+    persistPlayer(player)
     sendState(player)
 end
 
@@ -781,6 +800,7 @@ function Handlers.LearnTalent(player, talentId, rank)
             pet:SetUsedTalentCount(usedBefore + 1)
         end
         petFreeTalentPoints(player, pet)
+        persistPet(player)
         sendState(player)
         return
     end
@@ -812,6 +832,7 @@ function Handlers.LearnTalent(player, talentId, rank)
         player:LearnSpell(spellId)
         player:SetFreeTalentPoints(points - 1)
     end
+    persistPlayer(player)
     sendState(player)
 end
 
@@ -863,6 +884,7 @@ function Handlers.UnlearnTalent(player, talentId, rank)
             pet:SetUsedTalentCount(usedBefore - 1)
         end
         petFreeTalentPoints(player, pet)
+        persistPet(player)
         sendState(player)
         return
     end
@@ -893,6 +915,7 @@ function Handlers.UnlearnTalent(player, talentId, rank)
     end
     local points = player:GetFreeTalentPoints() or 0
     player:SetFreeTalentPoints(points + 1)
+    persistPlayer(player)
     sendState(player)
 end
 

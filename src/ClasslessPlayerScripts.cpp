@@ -129,6 +129,7 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
         if (!command) player->SetFreeTalentPoints(CurTalentPoints - talentPointsChange);
 
         sScriptMgr->OnPlayerLearnTalents(player, talentId, talentRank, spellId);
+        Classless_RequestSpellSave(player);
         return true;
     }
     return false;
@@ -141,6 +142,7 @@ void ClasslessPlayerScripts::OnPlayerTalentsReset(Player* player, bool /*noCost*
     // Trainer wipe only clears m_talents. Classless ranks also live in m_spells
     // and would keep costing points / showing as known after the reset.
     Classless_ClearLearnedTalentSpells(player);
+    Classless_RequestSpellSave(player);
 }
 
 void ClasslessPlayerScripts::OnPlayerCalculateTalentsPoints(Player const *player, uint32 &talentPointsForLevel) {

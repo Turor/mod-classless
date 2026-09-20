@@ -2238,14 +2238,20 @@ function refreshPanes()
         hidePool(ui.rightSpellButtons, 1)
         local petIds = {}
         local seen = {}
-        local function addPetSpell(id)
-            if id and isKnown(id) and not seen[id] then
-                seen[id] = true
-                petIds[#petIds + 1] = id
+        local function addPetSpell(id, activatableOnly)
+            if not id or seen[id] or not isKnown(id) then
+                return
             end
+            if activatableOnly then
+                if IsPassiveSpell and IsPassiveSpell(id) then
+                    return
+                end
+            end
+            seen[id] = true
+            petIds[#petIds + 1] = id
         end
         for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
-            addPetSpell(id)
+            addPetSpell(id, false)
         end
         for _, tabId in ipairs(tabs) do
             local nodes = Catalog and Catalog.talents and Catalog.talents[tabId]
@@ -2254,7 +2260,7 @@ function refreshPanes()
                     local ranks = nodes[i] and nodes[i].r
                     if ranks then
                         for r = 1, #ranks do
-                            addPetSpell(ranks[r])
+                            addPetSpell(ranks[r], true)
                         end
                     end
                 end

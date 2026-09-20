@@ -132,8 +132,16 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
 
     player->RecalculateUsedTalentCount();
     player->SendTalentsInfoData(false);
+    Classless_RequestSpellSave(player);
 
     return !player->HasSpell(dropSpellId) && !player->HasTalent(dropSpellId, player->GetActiveSpec());
+}
+
+void Classless_RequestSpellSave(Player* player)
+{
+    if (!player)
+        return;
+    player->AdditionalSavingAddMask(ADDITIONAL_SAVING_SPELLS_AND_TALENTS);
 }
 
 uint32 Classless_KnownTalentRank(Player* player, uint32 talentId)

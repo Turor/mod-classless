@@ -13,3 +13,4 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
 uint32 Classless_KnownTalentRank(Player* player, uint32 talentId);
 void Classless_ClearLearnedTalentSpells(Player* player);
 uint32 Classless_GetPetTalentTabs(Player* player, uint32* out, uint32 maxOut);
+void Classless_RequestSpellSave(Player* player);
