@@ -9,8 +9,8 @@ local Catalog = ClasslessUICatalog
 local FRAME_W, FRAME_H = 1000, 700
 local PANE_PAD = 12
 local SIDEBAR_W = 210
-local NAV_ROW_H = 20
-local NAV_SPEC_GAP = 1
+local NAV_ROW_H = 14
+local NAV_SPEC_GAP = 0
 local CLASS_FILE = {
     [1] = "WARRIOR",
     [2] = "PALADIN",
@@ -1091,7 +1091,7 @@ local function buildFrame()
     ui.sidebar = sidebar
 
     local function addWideNav(name, label, onClick, r, g, b)
-        local btn = createBannerButton(name, nav, SIDEBAR_W - 24, NAV_ROW_H + 4, r or 0.35, g or 0.35, b or 0.35, label)
+        local btn = createBannerButton(name, nav, SIDEBAR_W - 24, NAV_ROW_H, r or 0.35, g or 0.35, b or 0.35, label)
         btn:SetScript("OnClick", onClick)
         return btn
     end
@@ -1099,13 +1099,13 @@ local function buildFrame()
     local y = 0
     ui.navGeneral = addWideNav("ClasslessUINavGeneral", "General", selectGeneral, 0.55, 0.45, 0.25)
     ui.navGeneral:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 8)
+    y = y - NAV_ROW_H
 
     ui.navGlyph = addWideNav("ClasslessUINavGlyph", "Glyphs", function()
         selectExtra("glyph")
     end, 0.35, 0.55, 0.35)
     ui.navGlyph:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 10)
+    y = y - (NAV_ROW_H + 2)
 
     local blockH = NAV_ROW_H * 3 + NAV_SPEC_GAP * 2
     local iconSz = blockH
@@ -1142,14 +1142,14 @@ local function buildFrame()
         if info then
             icon:SetTexture(info.icon)
         end
-        y = y - (blockH + 6)
+        y = y - blockH
     end
 
     ui.navPet = addWideNav("ClasslessUINavPet", "Pet", function()
         selectExtra("pet")
     end, 0.45, 0.3, 0.15)
     ui.navPet:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 8)
+    y = y - NAV_ROW_H
     nav:SetHeight(math.abs(y) + 8)
 
     local body = CreateFrame("Frame", "ClasslessUIBody", frame)
