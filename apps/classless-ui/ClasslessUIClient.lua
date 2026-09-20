@@ -564,15 +564,26 @@ local function histogramLegal(counts)
     return true
 end
 
-local function unspentPetTalentPoints()
-    local server = ui.state.petPoints or 0
-    if GetUnspentTalentPoints then
-        local unspent = tonumber(GetUnspentTalentPoints(false, true))
-        if unspent and unspent > 0 then
-            return unspent
+local PET_POINTS_PER_ROW = 3
+
+local function petRowUnlocked(counts, row)
+    if not row or row <= 0 then
+        return true
+    end
+    return (counts[row - 1] or 0) >= PET_POINTS_PER_ROW
+end
+
+local function petHistogramLegal(counts)
+    for r = 1, MAX_TALENT_ROW do
+        if (counts[r] or 0) > 0 and not petRowUnlocked(counts, r) then
+            return false
         end
     end
-    return server
+    return true
+end
+
+local function unspentPetTalentPoints()
+    return ui.state.petPoints or 0
 end
 
 local function talentChainMet(node, rankOf)
@@ -599,8 +610,13 @@ local function talentIsLearnable(node)
     if points < 1 then
         return false
     end
-    local counts = buildRowHistogram(ui.selectedExtra == "pet")
-    if not rowUnlocked(counts, node.t or 0) then
+    local pet = ui.selectedExtra == "pet"
+    local counts = buildRowHistogram(pet)
+    if pet then
+        if not petRowUnlocked(counts, node.t or 0) then
+            return false
+        end
+    elseif not rowUnlocked(counts, node.t or 0) then
         return false
     end
     return talentChainMet(node, talentRank)
@@ -618,6 +634,12 @@ local function canUnlearnTalent(node)
         if counts[row] < 0 then
             counts[row] = 0
         end
+    end
+    if pet then
+        if not petHistogramLegal(counts) then
+            return false, UNLEARN_BLOCKED_MSG
+        end
+        return true
     end
     if not histogramLegal(counts) then
         return false, UNLEARN_BLOCKED_MSG
