@@ -345,6 +345,9 @@ local function isLearnable(spellId)
     if not spellId then
         return false
     end
+    if ui.selectedGeneral then
+        return false
+    end
     if Catalog and Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
         return false
     end
@@ -1001,7 +1004,12 @@ function refreshPanes()
             ui.talentPane.PointsOverlay:Hide()
         end
         hidePool(ui.talentButtons, 1)
-        local all = (Catalog and Catalog.generalSpells) or {}
+        local all = {}
+        for _, id in ipairs((Catalog and Catalog.generalSpells) or {}) do
+            if isKnown(id) then
+                all[#all + 1] = id
+            end
+        end
         local fams = groupSpellFamilies(all)
         local mid = math.ceil(#fams / 2)
         local left, right = {}, {}

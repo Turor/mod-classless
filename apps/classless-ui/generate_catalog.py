@@ -130,6 +130,8 @@ def main():
         )
 
     ATTR0_PASSIVE = 0x00000040
+    # Trade skill recipe — shown in the recipe list, not the spellbook.
+    ATTR0_IS_TRADESKILL = 0x00000020
     # Hidden in UI — not visible in spellbook or aura bar (Spell.dbc attributes bit 7).
     ATTR0_DO_NOT_DISPLAY = 0x00000080
     spell_attr0 = {}
@@ -145,7 +147,12 @@ def main():
     def in_spellbook(spell_id):
         if spell_id in BLOCKED_SPELLS:
             return False
-        return (spell_attr0.get(spell_id, 0) & ATTR0_DO_NOT_DISPLAY) == 0
+        attr = spell_attr0.get(spell_id, 0)
+        if attr & ATTR0_DO_NOT_DISPLAY:
+            return False
+        if attr & ATTR0_IS_TRADESKILL:
+            return False
+        return True
 
     def is_passive(spell_id):
         return (spell_attr0.get(spell_id, 0) & ATTR0_PASSIVE) != 0
@@ -367,6 +374,8 @@ def main():
     lines.append("    end")
     lines.append("  end")
     lines.append("  C.generalSpells = kept")
+    lines.append("  C.generalSet = {}")
+    lines.append("  for i = 1, #kept do C.generalSet[kept[i]] = true end")
     lines.append("end")
     lines.append("do")
     lines.append("  local kept = {}")

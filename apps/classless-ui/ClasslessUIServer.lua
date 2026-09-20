@@ -224,6 +224,9 @@ local function canLearnSpell(player, spellId)
     if Catalog.blockedSpells and Catalog.blockedSpells[spellId] then
         return false
     end
+    if Catalog.generalSet and Catalog.generalSet[spellId] then
+        return false
+    end
     if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
         return false
     end
