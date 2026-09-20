@@ -535,9 +535,13 @@ local function playerTalentPool(player)
     if not player then
         return 0
     end
-    local spent = allPointsOn(function(id)
+    local spent = 0
+    local hasFn = function(id)
         return playerHasTalentRank(player, id)
-    end, false, player)
+    end
+    forEachTalentNode(false, function(n)
+        spent = spent + nodeSpend(player, hasFn, n, false)
+    end)
     local free = 0
     if player.GetFreeTalentPoints then
         free = tonumber(player:GetFreeTalentPoints()) or 0
@@ -587,7 +591,11 @@ local function sendState(player)
         points = player:GetFreeTalentPoints() or 0
     end
     local pet = player:GetPet()
-    local petPoints = petFreeTalentPoints(player, pet)
+    local petPoints = 0
+    local petOk, petVal = pcall(petFreeTalentPoints, player, pet)
+    if petOk and type(petVal) == "number" then
+        petPoints = petVal
+    end
     local costs, altCosts = collectTrainCosts(player)
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
@@ -718,7 +726,11 @@ function Handlers.LearnTalent(player, talentId, rank)
             sendState(player)
             return
         end
-        local points = petFreeTalentPoints(player, pet)
+        local points = 0
+        local petOk, petVal = pcall(petFreeTalentPoints, player, pet)
+        if petOk and type(petVal) == "number" then
+            points = petVal
+        end
         if points < 1 then
             player:SendBroadcastMessage("No pet talent points remaining.")
             return
