@@ -21,6 +21,7 @@
 	<Script file="Blizzard_BindingUI.lua"/>
 	<Script file="Bagnon.lua" />
 	<Script file="Custom.lua" />
+	<Script file="ClasslessUI.lua" />
 	<Script file="Storyline.lua"/>
 </Ui>
 

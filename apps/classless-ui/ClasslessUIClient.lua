@@ -61,6 +61,7 @@ local function createBannerButton(name, parent, w, h, r, g, b, label)
     fs:SetJustifyH("LEFT")
     fs:SetText(label or "")
     btn.Label = fs
+    btn.hasPriority = true
     return btn
 end
 
@@ -933,6 +934,7 @@ local function createSpellButton(index, parent)
     iconBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     iconBtn:RegisterForDrag("LeftButton")
     iconBtn:EnableMouse(true)
+    iconBtn.hasPriority = true
     btn.IconBtn = iconBtn
 
     local prev = CreateFrame("Button", name .. "Prev", btn)
@@ -1134,6 +1136,19 @@ local function createSpellButton(index, parent)
         end
         AIO.Handle("ClasslessUIServer", "CastSpell", id)
     end)
+    iconBtn.SpecialClick = function()
+        if btn.family and btn.family.petSlot then
+            local petSpellId = selectedId()
+            if petSpellId then
+                AIO.Handle("ClasslessUIServer", "TogglePetAutocast", petSpellId)
+            end
+            return
+        end
+        local id = selectedId()
+        if id and isKnown(id) then
+            pickupSpellId(id)
+        end
+    end
     iconBtn:SetScript("OnDragStart", function()
         if btn.family and btn.family.petSlot then
             PickupSpell(btn.family.petSlot, "pet")
@@ -1155,6 +1170,7 @@ local function createTalentButton(index)
     btn:SetSize(TALENT_ICON, TALENT_ICON)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:RegisterForDrag("LeftButton")
+    btn.hasPriority = true
 
     local icon = btn:CreateTexture(nil, "ARTWORK")
     icon:SetAllPoints(btn)
@@ -1243,6 +1259,19 @@ local function createTalentButton(index)
         end
         AIO.Handle("ClasslessUIServer", "LearnTalent", self.node.id, current + 1)
     end)
+    btn.SpecialClick = function(self)
+        if ui.selectedExtra == "pet" then
+            return
+        end
+        if not self.node then
+            return
+        end
+        local current = talentRank(self.node)
+        local id = self.node.r[math.max(current, 1)]
+        if id and isKnown(id) then
+            pickupSpellId(id)
+        end
+    end
     btn:SetScript("OnDragStart", function(self)
         if ui.selectedExtra == "pet" then
             return
@@ -2022,6 +2051,7 @@ local function createGlyphSocket(parent, id, point, x, y)
     btn:SetID(id)
     btn:SetPoint(point, parent, point, x, y)
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    btn.hasPriority = true
 
     local setting = btn:CreateTexture(nil, "BACKGROUND")
     setting:SetPoint("CENTER", 0, 0)
@@ -2594,6 +2624,17 @@ local function buildFrame()
         layoutNav()
         refreshNav()
         refreshPanes()
+        if ConsolePort then
+            if ConsolePort.AddFrame then
+                ConsolePort:AddFrame("ClasslessUIFrame")
+            end
+            if ConsolePort.UpdateFrames then
+                ConsolePort:UpdateFrames(true)
+            end
+            if ConsolePort.SetCurrentNode and ui.navGeneral then
+                ConsolePort:SetCurrentNode(ui.navGeneral)
+            end
+        end
     end)
     frame:SetScript("OnSizeChanged", function()
         layoutNav()
@@ -2606,6 +2647,9 @@ local function buildFrame()
     ui.frame = frame
     layoutNav()
     selectSpec(ui.selectedClassId, 1)
+    if ConsolePort and ConsolePort.AddFrame then
+        ConsolePort:AddFrame("ClasslessUIFrame")
+    end
     return frame
 end
 
