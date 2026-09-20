@@ -1,9 +1,0 @@
-## Interface: 30300
-## Title: Console Port |cff739BD0LK|r |cff69ccf0Help|r
-## Notes: Tutorials and help pages for ConsolePort. Loaded on demand.
-## RequiredDeps: ConsolePort
-## LoadOnDemand: 1
-## DefaultState: disabled
-
-PageLoader.lua
-Pages.xml

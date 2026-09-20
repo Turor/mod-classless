@@ -62,3 +62,16 @@ UIMods/patch-n/DBFilesClient/*
 # Flyway CLI download (apply_patches.sh / apply_patches.ps1)
 #
 apps/patchgenerator/.flyway/
+
+#
+# ConsolePortLK lives in apps/consoleport-lk (Turor/ConsolePortLK).
+# scripts/sync-consoleport.sh copies it here for mpqcli.
+#
+UIMods/patch-n/Interface/AddOns/ConsolePort/
+UIMods/patch-n/Interface/AddOns/ConsolePortAdvanced/
+UIMods/patch-n/Interface/AddOns/ConsolePortBar/
+UIMods/patch-n/Interface/AddOns/ConsolePortHelp/
+UIMods/patch-n/Interface/AddOns/ConsolePortKeyboard/
+UIMods/patch-n/Interface/AddOns/ConsolePortLoader/
+UIMods/patch-n/Interface/AddOns/ConsolePortUI_Loot/
+UIMods/patch-n/Interface/AddOns/ConsolePortUI_Menu/
