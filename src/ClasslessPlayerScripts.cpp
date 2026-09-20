@@ -74,19 +74,8 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
         uint32 talentPointsChange = (talentRank - currentTalentRank + 1);
         if (!command && CurTalentPoints < talentPointsChange) return true;
 
-        if (talentInfo->DependsOn > 0)
-            if (TalentEntry const *depTalentInfo = sTalentStore.LookupEntry(talentInfo->DependsOn)) {
-                bool hasEnoughRank = false;
-                for (uint8 rank = talentInfo->DependsOnRank; rank < MAX_TALENT_RANK; rank++)
-                    if (depTalentInfo->RankID[rank] &&
-                        (player->HasTalent(depTalentInfo->RankID[rank], player->GetActiveSpec()) ||
-                         player->HasSpell(depTalentInfo->RankID[rank]))) {
-                        hasEnoughRank = true;
-                        break;
-                    }
-                if (!hasEnoughRank) return true;
-            }
-
+        // Classless: no arrow prereqs. Unlock is 5 × row points spent anywhere
+        // in this tree (TalentEntry::Row is 0-based).
         if (!command && talentInfo->Row > 0) {
             uint32 spentPoints = 0;
             for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i) {

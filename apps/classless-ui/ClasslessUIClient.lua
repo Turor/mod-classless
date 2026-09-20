@@ -402,6 +402,40 @@ local function talentRank(node)
     return rank
 end
 
+local function treePointsForTab(tabId)
+    local nodes = Catalog and Catalog.talents and Catalog.talents[tabId]
+    if not nodes then
+        return 0
+    end
+    local spent = 0
+    for _, node in ipairs(nodes) do
+        spent = spent + talentRank(node)
+    end
+    return spent
+end
+
+local function talentIsLearnable(node)
+    if not node or not node.r or #node.r < 1 then
+        return false
+    end
+    local current = talentRank(node)
+    if current >= #node.r then
+        return false
+    end
+    local points = ui.state.points or 0
+    if ui.selectedExtra == "pet" then
+        points = ui.state.petPoints or 0
+    end
+    if points < 1 then
+        return false
+    end
+    local row = node.t or 0
+    if treePointsForTab(node.tabId) < (row * 5) then
+        return false
+    end
+    return true
+end
+
 local function specSpellIds()
     if ui.selectedGeneral then
         return (Catalog and Catalog.generalSpells) or {}, { id = "general", name = "General" }
@@ -779,6 +813,17 @@ local function createTalentButton(index)
     rankFs:SetPoint("BOTTOMRIGHT", 2, -2)
     btn.RankText = rankFs
 
+    local plus = btn:CreateTexture(nil, "OVERLAY")
+    plus:SetSize(18, 18)
+    plus:SetPoint("TOPLEFT", -3, 3)
+    plus:SetTexture("Interface\\Buttons\\UI-PlusButton-Up")
+    plus:SetVertexColor(0.15, 1, 0.15)
+    if plus.SetDrawLayer then
+        plus:SetDrawLayer("OVERLAY", 7)
+    end
+    plus:Hide()
+    btn.Plus = plus
+
     local hilight = btn:CreateTexture(nil, "HIGHLIGHT")
     hilight:SetAllPoints(btn)
     hilight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
@@ -978,6 +1023,13 @@ local function renderTalentTree(tabId, yOffset, startIndex)
             btn.Slot:SetVertexColor(0.1, 1.0, 0.1)
         else
             btn.Slot:SetVertexColor(1.0, 0.82, 0)
+        end
+        if btn.Plus then
+            if talentIsLearnable(node) then
+                btn.Plus:Show()
+            else
+                btn.Plus:Hide()
+            end
         end
         local x = TALENT_OFF_X + (node.c * TALENT_GAP)
         local y = yOffset - TALENT_OFF_Y - (node.t * TALENT_GAP) -- yOffset is already negative or 0

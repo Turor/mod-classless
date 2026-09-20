@@ -17,6 +17,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | unlearn-cpp | `Classless_DropTalentRank` fully marks dropped ranks `PLAYERSPELL_REMOVED` (Lua `RemoveSpell` cannot). `Player:DropTalentRank` peels 5→4→3→… without re-teaching the chain. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 | 2026-09-19 | talent-sync | Classless UI learned ranks include stock `HasTalent` (m_talents), not only `HasSpell`. Client refreshes on `PLAYER_TALENT_UPDATE` / `CHARACTER_POINTS_CHANGED`. DropTalentRank also `_removeTalent` / `addTalent` so both maps stay aligned. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 | 2026-09-19 | talent-learn-path | Classless left-click uses `Player:LearnTalent` (addTalent), same as the default panel. Known rank is the highest HasTalent/HasSpell on Talent.dbc RankID, and 1..rank are marked learned so a stock max rank shows as max. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
+| 2026-09-19 | talent-plus | Learnable talent ranks show the same green plus as spells. Tree unlock is 5× row points spent anywhere in that tree; arrow prereqs are not required. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 
 ## Why a new system
 

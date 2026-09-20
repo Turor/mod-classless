@@ -409,17 +409,10 @@ local function talentPrereqsOk(hasFn, node, rank)
     if rank > 1 and not hasFn(node.r[rank - 1]) then
         return false, "Learn the previous talent rank first."
     end
-    if node.p and node.p > 0 then
-        local dep = Catalog.talentById[node.p]
-        local need = (node.pr or 0) + 1
-        if not dep or not dep.r[need] or not hasFn(dep.r[need]) then
-            return false, "Missing talent prerequisite."
-        end
-    end
-    if node.t and node.t > 0 then
-        if treePointsOn(hasFn, node.tabId) < (node.t * 5) then
-            return false, "Not enough points in this tree."
-        end
+    -- Unlock is 5 × row points spent anywhere in this tree. No arrow prereqs.
+    local row = node.t or 0
+    if row > 0 and treePointsOn(hasFn, node.tabId) < (row * 5) then
+        return false, "Not enough points in this tree."
     end
     return true
 end
