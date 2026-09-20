@@ -1080,18 +1080,16 @@ local function buildFrame()
     local close = CreateFrame("Button", "ClasslessUIFrameClose", frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
 
-    local sidebar = CreateFrame("ScrollFrame", "ClasslessUISidebar", frame, "UIPanelScrollFrameTemplate")
-    sidebar:SetPoint("TOPRIGHT", -28, -36)
-    sidebar:SetPoint("BOTTOMRIGHT", -28, PANE_PAD)
+    local sidebar = CreateFrame("Frame", "ClasslessUISidebar", frame)
+    sidebar:SetPoint("TOPRIGHT", -4, -36)
+    sidebar:SetPoint("BOTTOMRIGHT", -4, 8)
     sidebar:SetWidth(SIDEBAR_W)
     local nav = CreateFrame("Frame", "ClasslessUINav", sidebar)
-    nav:SetWidth(SIDEBAR_W - 8)
-    nav:SetHeight(1)
-    sidebar:SetScrollChild(nav)
+    nav:SetAllPoints(sidebar)
     ui.sidebar = sidebar
 
     local function addWideNav(name, label, onClick, r, g, b)
-        local btn = createBannerButton(name, nav, SIDEBAR_W - 24, NAV_ROW_H, r or 0.35, g or 0.35, b or 0.35, label)
+        local btn = createBannerButton(name, nav, SIDEBAR_W, NAV_ROW_H, r or 0.35, g or 0.35, b or 0.35, label)
         btn:SetScript("OnClick", onClick)
         return btn
     end
@@ -1109,13 +1107,13 @@ local function buildFrame()
 
     local blockH = NAV_ROW_H * 3 + NAV_SPEC_GAP * 2
     local iconSz = blockH
-    local bannerW = SIDEBAR_W - 28 - iconSz
+    local bannerW = SIDEBAR_W - iconSz
     local order = Catalog and Catalog.classOrder or {}
     for _, classId in ipairs(order) do
         local info = classInfo(classId)
         local cr, cg, cb = classRGB(classId)
         local block = CreateFrame("Frame", "ClasslessUINavClass" .. classId, nav)
-        block:SetSize(SIDEBAR_W - 16, blockH)
+        block:SetSize(SIDEBAR_W, blockH)
         block:SetPoint("TOPLEFT", 0, y)
         local specBtns = {}
         for i = 1, 3 do
@@ -1150,12 +1148,11 @@ local function buildFrame()
     end, 0.45, 0.3, 0.15)
     ui.navPet:SetPoint("TOPLEFT", 0, y)
     y = y - NAV_ROW_H
-    nav:SetHeight(math.abs(y) + 8)
 
     local body = CreateFrame("Frame", "ClasslessUIBody", frame)
     body:SetPoint("TOPLEFT", PANE_PAD, -36)
     body:SetPoint("BOTTOMLEFT", PANE_PAD, PANE_PAD)
-    body:SetPoint("RIGHT", sidebar, "LEFT", -10, 0)
+    body:SetPoint("RIGHT", sidebar, "LEFT", -2, 0)
 
     ui.spellPane = createScrollPane("ClasslessUISpellPane", body, "Spells")
     ui.spellPane:SetPoint("TOPLEFT")
