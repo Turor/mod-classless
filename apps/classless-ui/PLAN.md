@@ -11,6 +11,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | 0–1 | Living plan; header chrome; empty panes | Catalog + rendering |
 | 2026-09-19 | 2–5 | `CatalogData.lua` from Talent.sql + SkillLineAbility (2604 spells, 1014 talent nodes); spellbook families with rank arrows; talent grid; LearnSpell / LearnTalent / UnlearnTalent; RequestState sends real `HasSpell` | Prereq branch textures, glyph pane, pet spells, pickup edge cases, strip XML from MPQ, N-key hook |
 | 2026-09-19 | debug | AIO errors go to chat, Blizzard script-error UI (`scriptErrors`), `AIO_ERRORS` in WTF SavedVariables, and worldserver `[AIO client][Name]`. Obfuscation off. Ignore `TalentsAndSpellbook.xml` FontString warning. | Restore `AIO_CODE_OBFUSCATE` before a real patch |
+| 2026-09-19 | catalog | Spellbook is **class trainer_spell** (Type=0), not raw SkillLineAbility. SLA only assigns a trained spell to a spec. `class_trainer_spells.txt` is a dump from acore_world. | Glyph pane; talent-node denylist if a talent should be hidden |
 
 ## Why a new system
 

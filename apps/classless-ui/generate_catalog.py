@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Build CatalogData.lua from Talent.sql + SkillLineAbility.sql."""
+"""Build CatalogData.lua from Talent.sql, SkillLineAbility.sql, and live class trainers.
+
+Spellbook entries are restricted to spells class trainers actually teach
+(acore_world.trainer_spell for trainer.Type = 0). SkillLineAbility is only
+used to place a trainer spell into a spec. Talent trees stay Talent.dbc.
+"""
 
 import re
 from collections import defaultdict
@@ -33,6 +38,20 @@ BLOCKED_SPELLS = {
     42651,  # Army of the Dead summon trigger
 }
 
+# creature_default_trainer / trainer.Id -> ChrClasses id (Type=0 class trainers).
+TRAINER_TO_CLASS = {
+    1: 1, 2: 1,  # Warrior
+    3: 2, 4: 2, 5: 2, 6: 2,  # Paladin
+    7: 3, 8: 3,  # Hunter
+    9: 4, 10: 4,  # Rogue
+    11: 5, 12: 5,  # Priest
+    13: 6,  # Death Knight
+    14: 7, 15: 7,  # Shaman
+    16: 8, 17: 8,  # Mage
+    31: 9, 32: 9,  # Warlock
+    33: 11, 34: 11,  # Druid
+}
+
 TUPLE_RE = re.compile(r"\(([^()]+)\)")
 
 
@@ -50,6 +69,23 @@ def parse_tuples(path: Path):
 
 def lua_list(nums):
     return "{" + ",".join(str(n) for n in nums) + "}"
+
+
+def load_trainer_spells(path: Path):
+    by_class = defaultdict(set)
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        trainer_id, spell = int(parts[0]), int(parts[1])
+        class_id = TRAINER_TO_CLASS.get(trainer_id)
+        if not class_id or spell in BLOCKED_SPELLS:
+            continue
+        by_class[class_id].add(spell)
+    return by_class
 
 
 def main():
@@ -80,22 +116,36 @@ def main():
             }
         )
 
+    trainer_by_class = load_trainer_spells(Path(__file__).resolve().parent / "class_trainer_spells.txt")
+    trainer_all = set()
+    for s in trainer_by_class.values():
+        trainer_all |= s
+
+    # Skill line -> spec, but only for spells a class trainer actually sells.
     spells = defaultdict(lambda: defaultdict(list))
-    seen = defaultdict(set)
+    placed = defaultdict(set)
     for row in sla_rows:
         if len(row) < 3:
             continue
         skill, spell = row[1], row[2]
-        if spell <= 0 or spell in talent_spell_ids or spell in BLOCKED_SPELLS:
+        if spell <= 0 or spell in BLOCKED_SPELLS:
             continue
         mapped = SKILL_TO_SPEC.get(skill)
         if not mapped:
             continue
         class_id, spec_id = mapped
-        if spell in seen[(class_id, spec_id)]:
+        if spell not in trainer_by_class.get(class_id, ()):
             continue
-        seen[(class_id, spec_id)].add(spell)
+        if spell in placed[class_id]:
+            continue
+        placed[class_id].add(spell)
         spells[class_id][spec_id].append(spell)
+
+    for class_id, trained in trainer_by_class.items():
+        leftover = sorted(trained - placed[class_id] - BLOCKED_SPELLS)
+        for spell in leftover:
+            spells[class_id]["general"].append(spell)
+            placed[class_id].add(spell)
 
     for class_id in spells:
         for spec_id in spells[class_id]:
@@ -129,7 +179,15 @@ def main():
     lines.append("C.spellSet = {}")
     lines.append("for classId, specs in pairs(C.spells) do")
     lines.append("  for specId, ids in pairs(specs) do")
-    lines.append("    for i = 1, #ids do C.spellSet[ids[i]] = true end")
+    lines.append("    local kept = {}")
+    lines.append("    for i = 1, #ids do")
+    lines.append("      local sid = ids[i]")
+    lines.append("      if not (C.blockedSpells and C.blockedSpells[sid]) then")
+    lines.append("        kept[#kept + 1] = sid")
+    lines.append("        C.spellSet[sid] = true")
+    lines.append("      end")
+    lines.append("    end")
+    lines.append("    C.spells[classId][specId] = kept")
     lines.append("  end")
     lines.append("end")
     lines.append("C.talentById = {}")
