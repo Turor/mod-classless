@@ -25,6 +25,8 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | spell-cost-cell | Unlearned spell cells show gold (and item currency) under name then rank/passive. Red if the player cannot pay. Known ranks hide the line. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | resource-bar | Live `Interface/AddOns/ClasslessUIAddons/ResourceBar.lua` was the old energy/rage/mana stack (no runes). Restored the patch-n rune grid + runic bar; MainFrame height is 4 bars. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | aio-resource | Resource bar is AIO `ClasslessResourceBar.lua`. ClasslessUIAddons lua/xml/toc stripped from patch-n; only parchment + bar TGAs remain. Native Linux `mpqcli` packs the MPQ. | N-key hook |
+| 2026-09-20 | n-p-hook | `ToggleSpellBook` (P) and `ToggleTalentFrame` (N) open ClasslessUI instead of the stock book/talent frames. `/classless` still toggles. | Strip leftover XML if any |
+| 2026-09-20 | pet-row-prefix | Pet tree row k unlocks when `sum(n[0]..n[k-1]) >= 3k` (same prefix rule as player 5k), not 3 points in the previous row only. C++ + client/server Lua. | |
 
 ## Why a new system
 
@@ -148,11 +150,11 @@ Server Lua is the default (`LearnSpell`, `RemoveSpell`, `HasSpell`, `SetFreeTale
 9. Glyph + Pet panes.
 10. Rest of classes.
 11. Remove XML wiremock from `patch-n.mpq`.
-12. Hook N / `ToggleTalentFrame` only after every path works.
+12. Hook N / P (`ToggleTalentFrame` / `ToggleSpellBook`) to ClasslessUI.
 
 ## Verification (current pass)
 
-- `/classless` and `.classless` open the frame; drag and close work.
+- `/classless`, `.classless`, **N**, and **P** toggle the frame; drag and close work. Stock spellbook/talent frames stay closed.
 - Class click retargets spec 1–3 + General labels/icons.
 - Glyph tab shows the stock 6-socket UI; Pet tab is selectable.
 - Teleporter / transmog AIO still load.

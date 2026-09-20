@@ -359,6 +359,7 @@ end
 
 local MAX_TALENT_ROW = 15
 local POINTS_PER_ROW = 5
+local PET_POINTS_PER_ROW = 3
 
 local function buildRowHistogram(player, hasFn, pet)
     local counts = {}
@@ -390,9 +391,17 @@ local function rowUnlocked(counts, row)
     return prefixBelow(counts, row) >= (row * POINTS_PER_ROW)
 end
 
-local function histogramLegal(counts)
+local function petRowUnlocked(counts, row)
+    if not row or row <= 0 then
+        return true
+    end
+    return prefixBelow(counts, row) >= (row * PET_POINTS_PER_ROW)
+end
+
+local function histogramLegal(counts, pet)
+    local unlocked = pet and petRowUnlocked or rowUnlocked
     for r = 1, MAX_TALENT_ROW do
-        if (counts[r] or 0) > 0 and not rowUnlocked(counts, r) then
+        if (counts[r] or 0) > 0 and not unlocked(counts, r) then
             return false
         end
     end
@@ -412,7 +421,7 @@ local function unlearnWouldOrphan(player, hasFn, node, pet)
             counts[row] = 0
         end
     end
-    if not histogramLegal(counts) then
+    if not histogramLegal(counts, pet) then
         return true, UNLEARN_BLOCKED_MSG
     end
     return false, UNLEARN_BLOCKED_MSG
@@ -770,7 +779,8 @@ local function talentPrereqsOk(player, hasFn, node, rank)
     local row = node.t or 0
     local pet = isPetTabId(node.tabId)
     local counts = buildRowHistogram(player, hasFn, pet)
-    if not rowUnlocked(counts, row) then
+    local unlocked = pet and petRowUnlocked(counts, row) or rowUnlocked(counts, row)
+    if not unlocked then
         return false, "Not enough talent points in earlier rows."
     end
     return true

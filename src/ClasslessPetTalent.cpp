@@ -54,18 +54,26 @@ static void ClasslessPet_BuildRowCounts(Pet* pet, uint32 tabId, uint32* counts)
     }
 }
 
+static uint32 ClasslessPet_PrefixBelow(uint32 const* counts, uint32 row)
+{
+    uint32 sum = 0;
+    for (uint32 r = 0; r < row && r <= PET_MAX_ROW; ++r)
+        sum += counts[r];
+    return sum;
+}
+
 static bool ClasslessPet_RowUnlocked(uint32 const* counts, uint32 row)
 {
     if (row == 0)
         return true;
-    return counts[row - 1] >= PET_POINTS_PER_ROW;
+    return ClasslessPet_PrefixBelow(counts, row) >= row * PET_POINTS_PER_ROW;
 }
 
 static bool ClasslessPet_HistogramLegal(uint32 const* counts)
 {
     for (uint32 r = 1; r <= PET_MAX_ROW; ++r)
     {
-        if (counts[r] > 0 && counts[r - 1] < PET_POINTS_PER_ROW)
+        if (counts[r] > 0 && !ClasslessPet_RowUnlocked(counts, r))
             return false;
     }
     return true;

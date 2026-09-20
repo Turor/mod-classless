@@ -571,7 +571,7 @@ local function petRowUnlocked(counts, row)
     if not row or row <= 0 then
         return true
     end
-    return (counts[row - 1] or 0) >= PET_POINTS_PER_ROW
+    return prefixBelow(counts, row) >= (row * PET_POINTS_PER_ROW)
 end
 
 local function petHistogramLegal(counts)
@@ -2660,11 +2660,46 @@ function Handlers.SetEnabled(_, enabled)
     end
 end
 
+local function hideStockSpellAndTalentFrames()
+    if SpellBookFrame and SpellBookFrame:IsShown() then
+        if HideUIPanel then
+            HideUIPanel(SpellBookFrame)
+        else
+            SpellBookFrame:Hide()
+        end
+    end
+    if PlayerTalentFrame and PlayerTalentFrame:IsShown() then
+        if HideUIPanel then
+            HideUIPanel(PlayerTalentFrame)
+        else
+            PlayerTalentFrame:Hide()
+        end
+    end
+    if GlyphFrame and GlyphFrame:IsShown() then
+        GlyphFrame:Hide()
+    end
+end
+
+local function toggleClasslessFrame()
+    if not moduleEnabled then
+        return false
+    end
+    local frame = buildFrame()
+    if frame:IsShown() then
+        frame:Hide()
+    else
+        hideStockSpellAndTalentFrames()
+        Handlers.ShowUI()
+    end
+    return true
+end
+
 function Handlers.ShowUI(player)
     if not moduleEnabled then
         return
     end
     local frame = buildFrame()
+    hideStockSpellAndTalentFrames()
     frame:Show()
     AIO.Handle("ClasslessUIServer", "RequestState")
 end
@@ -2783,10 +2818,32 @@ SlashCmdList["CLASSLESSUI"] = function()
         print("Classless module is disabled.")
         return
     end
-    local frame = buildFrame()
-    if frame:IsShown() then
-        frame:Hide()
-    else
-        Handlers.ShowUI()
+    toggleClasslessFrame()
+end
+
+if not _G.ClasslessUI_OrigToggleSpellBook then
+    _G.ClasslessUI_OrigToggleSpellBook = ToggleSpellBook
+end
+if not _G.ClasslessUI_OrigToggleTalentFrame then
+    _G.ClasslessUI_OrigToggleTalentFrame = ToggleTalentFrame
+end
+
+function ToggleSpellBook(bookType, ...)
+    if toggleClasslessFrame() then
+        return
+    end
+    local orig = _G.ClasslessUI_OrigToggleSpellBook
+    if orig then
+        return orig(bookType, ...)
+    end
+end
+
+function ToggleTalentFrame(...)
+    if toggleClasslessFrame() then
+        return
+    end
+    local orig = _G.ClasslessUI_OrigToggleTalentFrame
+    if orig then
+        return orig(...)
     end
 end
