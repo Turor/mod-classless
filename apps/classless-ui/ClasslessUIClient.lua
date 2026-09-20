@@ -9,7 +9,57 @@ local Catalog = ClasslessUICatalog
 local FRAME_W, FRAME_H = 1000, 700
 local PANE_PAD = 12
 local SIDEBAR_W = 210
-local NAV_ROW_H = 28
+local NAV_ROW_H = 20
+local NAV_SPEC_GAP = 1
+local CLASS_FILE = {
+    [1] = "WARRIOR",
+    [2] = "PALADIN",
+    [3] = "HUNTER",
+    [4] = "ROGUE",
+    [5] = "PRIEST",
+    [6] = "DEATHKNIGHT",
+    [7] = "SHAMAN",
+    [8] = "MAGE",
+    [9] = "WARLOCK",
+    [11] = "DRUID",
+}
+
+local function classRGB(classId)
+    local file = CLASS_FILE[classId]
+    local c = RAID_CLASS_COLORS and file and RAID_CLASS_COLORS[file]
+    if c then
+        return c.r, c.g, c.b
+    end
+    return 0.45, 0.45, 0.45
+end
+
+local function createBannerButton(name, parent, w, h, r, g, b, label)
+    local btn = CreateFrame("Button", name, parent)
+    btn:SetSize(w, h)
+    btn:RegisterForClicks("LeftButtonUp")
+    local bg = btn:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(btn)
+    bg:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+    bg:SetVertexColor(r, g, b, 0.92)
+    btn.Bg = bg
+    local selected = btn:CreateTexture(nil, "ARTWORK")
+    selected:SetAllPoints(btn)
+    selected:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+    selected:SetVertexColor(1, 1, 1, 0.35)
+    selected:Hide()
+    btn.SelectedTexture = selected
+    local hilight = btn:CreateTexture(nil, "HIGHLIGHT")
+    hilight:SetAllPoints(btn)
+    hilight:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
+    hilight:SetVertexColor(1, 1, 1, 0.2)
+    local fs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    fs:SetPoint("LEFT", 6, 0)
+    fs:SetPoint("RIGHT", -4, 0)
+    fs:SetJustifyH("LEFT")
+    fs:SetText(label or "")
+    btn.Label = fs
+    return btn
+end
 
 local ui = {
     frame = nil,
@@ -1040,42 +1090,45 @@ local function buildFrame()
     sidebar:SetScrollChild(nav)
     ui.sidebar = sidebar
 
-    local function addWideNav(name, label, onClick)
-        local btn = createTabButton(name, nav, SIDEBAR_W - 24, NAV_ROW_H)
-        btn:SetText(label)
+    local function addWideNav(name, label, onClick, r, g, b)
+        local btn = createBannerButton(name, nav, SIDEBAR_W - 24, NAV_ROW_H + 4, r or 0.35, g or 0.35, b or 0.35, label)
         btn:SetScript("OnClick", onClick)
         return btn
     end
 
     local y = 0
-    ui.navGeneral = addWideNav("ClasslessUINavGeneral", "General", selectGeneral)
+    ui.navGeneral = addWideNav("ClasslessUINavGeneral", "General", selectGeneral, 0.55, 0.45, 0.25)
     ui.navGeneral:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 4)
+    y = y - (NAV_ROW_H + 8)
 
     ui.navGlyph = addWideNav("ClasslessUINavGlyph", "Glyphs", function()
         selectExtra("glyph")
-    end)
+    end, 0.35, 0.55, 0.35)
     ui.navGlyph:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 8)
+    y = y - (NAV_ROW_H + 10)
 
-    local specW = 52
-    local iconSz = 24
+    local blockH = NAV_ROW_H * 3 + NAV_SPEC_GAP * 2
+    local iconSz = blockH
+    local bannerW = SIDEBAR_W - 28 - iconSz
     local order = Catalog and Catalog.classOrder or {}
     for _, classId in ipairs(order) do
         local info = classInfo(classId)
-        local row = CreateFrame("Frame", "ClasslessUINavClass" .. classId, nav)
-        row:SetSize(SIDEBAR_W - 16, NAV_ROW_H)
-        row:SetPoint("TOPLEFT", 0, y)
+        local cr, cg, cb = classRGB(classId)
+        local block = CreateFrame("Frame", "ClasslessUINavClass" .. classId, nav)
+        block:SetSize(SIDEBAR_W - 16, blockH)
+        block:SetPoint("TOPLEFT", 0, y)
         local specBtns = {}
         for i = 1, 3 do
             local spec = info and info.specs and info.specs[i]
-            local btn = createTabButton("ClasslessUINavSpec" .. classId .. "_" .. i, row, specW, NAV_ROW_H - 2)
-            btn:SetPoint("LEFT", (i - 1) * (specW + 2), 0)
-            btn:SetText(spec and spec.name or tostring(i))
-            local fs = btn:GetFontString()
-            if fs then
-                fs:SetFontObject(GameFontNormalSmall)
-            end
+            local btn = createBannerButton(
+                "ClasslessUINavSpec" .. classId .. "_" .. i,
+                block,
+                bannerW,
+                NAV_ROW_H,
+                cr, cg, cb,
+                spec and spec.name or tostring(i)
+            )
+            btn:SetPoint("TOPLEFT", 0, -((i - 1) * (NAV_ROW_H + NAV_SPEC_GAP)))
             local capturedClass, capturedSpec = classId, i
             btn:SetScript("OnClick", function()
                 selectSpec(capturedClass, capturedSpec)
@@ -1083,20 +1136,20 @@ local function buildFrame()
             specBtns[i] = btn
         end
         ui.navSpecButtons[classId] = specBtns
-        local icon = row:CreateTexture(nil, "ARTWORK")
+        local icon = block:CreateTexture(nil, "ARTWORK")
         icon:SetSize(iconSz, iconSz)
-        icon:SetPoint("RIGHT", 0, 0)
+        icon:SetPoint("TOPRIGHT", 0, 0)
         if info then
             icon:SetTexture(info.icon)
         end
-        y = y - (NAV_ROW_H + 4)
+        y = y - (blockH + 6)
     end
 
     ui.navPet = addWideNav("ClasslessUINavPet", "Pet", function()
         selectExtra("pet")
-    end)
+    end, 0.45, 0.3, 0.15)
     ui.navPet:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 4)
+    y = y - (NAV_ROW_H + 8)
     nav:SetHeight(math.abs(y) + 8)
 
     local body = CreateFrame("Frame", "ClasslessUIBody", frame)
