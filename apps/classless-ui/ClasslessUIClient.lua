@@ -88,7 +88,7 @@ local ui = {
     talentBranchPool = {},
     talentArrowPool = {},
     spellRankSel = {},
-    state = { learned = {}, learnable = {}, petLearned = {}, petLearnable = {}, petReqLevels = {}, petOut = false, points = 0, petPoints = 0 },
+    state = { learned = {}, learnable = {}, petLearned = {}, petOut = false, points = 0, petPoints = 0 },
 }
 
 local refreshPanes
@@ -366,14 +366,7 @@ local function isLearnable(spellId)
         return false
     end
     if ui.selectedExtra == "pet" then
-        if not hasPetOut() then
-            return false
-        end
-        local t = ui.state.petLearnable
-        if not t then
-            return false
-        end
-        return t[spellId] or t[tostring(spellId)]
+        return false
     end
     local t = ui.state.learnable
     if not t then
@@ -387,9 +380,6 @@ local function reqLevel(spellId)
         return nil
     end
     local t = ui.state.reqLevels
-    if ui.selectedExtra == "pet" then
-        t = ui.state.petReqLevels
-    end
     if not t then
         return nil
     end
@@ -2223,7 +2213,7 @@ function refreshPanes()
         hidePool(ui.rightSpellButtons, 1)
         local petIds = {}
         for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
-            if isKnown(id) or isLearnable(id) then
+            if isKnown(id) then
                 petIds[#petIds + 1] = id
             end
         end
@@ -2495,22 +2485,6 @@ function Handlers.ApplyState(player, state)
                 end
             end
         end
-        local petLearnable = {}
-        if type(state.petLearnable) == "table" then
-            for k, v in pairs(state.petLearnable) do
-                if v then
-                    local id = tonumber(k) or k
-                    petLearnable[id] = true
-                end
-            end
-        end
-        local petReqLevels = {}
-        if type(state.petReqLevels) == "table" then
-            for k, v in pairs(state.petReqLevels) do
-                local id = tonumber(k) or k
-                petReqLevels[id] = tonumber(v)
-            end
-        end
         local reqLevels = {}
         if type(state.reqLevels) == "table" then
             for k, v in pairs(state.reqLevels) do
@@ -2544,8 +2518,6 @@ function Handlers.ApplyState(player, state)
             costs = costs,
             altCosts = altCosts,
             petLearned = petLearned,
-            petLearnable = petLearnable,
-            petReqLevels = petReqLevels,
             petOut = state.petOut and true or false,
             points = tonumber(state.points) or 0,
             petPoints = tonumber(state.petPoints) or 0,
