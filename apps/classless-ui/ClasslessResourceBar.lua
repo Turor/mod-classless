@@ -54,8 +54,13 @@ local classlessRuneMapping = {
 
 
 function ClasslessCooldownFrame_SetTimer(self, start, duration, enable)
+	if not self then
+		return
+	end
+	start = tonumber(start) or 0
+	duration = tonumber(duration) or 0
+	enable = tonumber(enable) or 0
 	if ( start > 0 and duration > 0 and enable > 0) then
-
 		self:SetCooldown(start, duration);
 		self:Show();
 	else
@@ -68,10 +73,18 @@ function ClasslessRuneButton_OnLoad (self)
 end
 
 function ClasslessRuneButton_OnUpdate (self, elapsed)
-	local cooldown = self.cooldown;
+	local cooldown = self.cooldown or _G[self:GetName().."Cooldown"];
+	if not GetRuneCooldown then
+		self:SetScript("OnUpdate", nil);
+		return
+	end
 	local start, duration, runeReady = GetRuneCooldown(self:GetID());
 	local displayCooldown = (runeReady and 0) or 1;
-	ClasslessCooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+	if CooldownFrame_SetTimer then
+		CooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+	else
+		ClasslessCooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+	end
 
 	if ( runeReady ) then
 		self:SetScript("OnUpdate", nil);
@@ -113,14 +126,34 @@ function ClasslessRuneButton_OnLeave(self)
 	GameTooltip:Hide();
 end
 
+local function syncClasslessRuneCooldowns(runeFrame)
+	runeFrame = runeFrame or ClasslessRuneFrame
+	if not runeFrame or not runeFrame.runes then
+		return
+	end
+	for i = 1, #(runeFrame.runes) do
+		local btn = runeFrame.runes[i]
+		if btn then
+			btn:SetScript("OnUpdate", ClasslessRuneButton_OnUpdate)
+			ClasslessRuneButton_OnUpdate(btn, 0)
+		end
+	end
+end
+
 function ClasslessRuneFrame_OnEvent (self, event, ...)
 	if ( event == "RUNE_POWER_UPDATE" ) then
-		local rune, usable = ...;
-		if ( not usable and rune and self.runes[rune] ) then
-			self.runes[rune]:SetScript("OnUpdate", ClasslessRuneButton_OnUpdate);
-		elseif ( usable and rune and self.runes[rune] ) then
-			self.runes[rune].shine.shineTex:SetVertexColor(1, 1, 1);
-			ClasslessRuneButton_ShineFadeIn(self.runes[rune].shine)
+		local rune = ...;
+		if ( rune and self.runes[rune] ) then
+			local btn = self.runes[rune]
+			btn:SetScript("OnUpdate", ClasslessRuneButton_OnUpdate)
+			ClasslessRuneButton_OnUpdate(btn, 0)
+			local _, _, ready = GetRuneCooldown and GetRuneCooldown(btn:GetID())
+			if ready and btn.shine and btn.shine.shineTex then
+				btn.shine.shineTex:SetVertexColor(1, 1, 1);
+				ClasslessRuneButton_ShineFadeIn(btn.shine)
+			end
+		else
+			syncClasslessRuneCooldowns(self)
 		end
 	elseif ( event == "RUNE_TYPE_UPDATE" ) then
         local rune = ...;
@@ -133,6 +166,7 @@ function ClasslessRuneFrame_OnEvent (self, event, ...)
             local t = GetRuneType and GetRuneType(i)
             ClasslessRuneButton_Update(self.runes[i], t or self.runes[i].runeType, true);
         end
+        syncClasslessRuneCooldowns(self)
     end
 end
 
@@ -294,26 +328,21 @@ for i = 1, RUNE_COUNT do
     shineTex:SetTexCoord(0.5625, 1, 0, 1)
     shine.shineTex = shineTex
 
-    -- ============================================================
-    -- Cooldown
-    -- ============================================================
+    -- Stock RuneButton cooldown is a raw Cooldown (not CooldownFrameTemplate,
+    -- which is hidden). Cover the 24px icon so the swipe is visible.
     local cd = CreateFrame(
         "Cooldown",
         "ClasslessRune" .. i .. "Cooldown",
-        rune,
-        "CooldownFrameTemplate"
+        rune
     )
-    cd:SetSize(15,15)
     cd:ClearAllPoints()
-    cd:SetPoint("CENTER", rune, "CENTER", 0, -1)
+    cd:SetAllPoints(rune)
+    cd:SetFrameStrata("LOW")
     if cd.SetDrawEdge then
         cd:SetDrawEdge(true)
     end
     cd:SetFrameLevel(rune:GetFrameLevel() + 2)
-    if cd.SetReverse then
-        cd:SetReverse(true)
-    end
-    cd:Show()
+    cd:Hide()
 
 
     -- ============================================================
@@ -353,14 +382,13 @@ for i = 1, RUNE_COUNT do
 ClasslessRuneButton_Update(ClasslessRunes[i], ClasslessRunes[i].runeType, true)
 end
 
-
-
 ClasslessRuneFrame:RegisterEvent("RUNE_POWER_UPDATE");
 ClasslessRuneFrame:RegisterEvent("RUNE_TYPE_UPDATE");
 ClasslessRuneFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 
 ClasslessRuneFrame:SetScript("OnEvent", ClasslessRuneFrame_OnEvent);
 ClasslessRuneFrame:Show();
+syncClasslessRuneCooldowns(ClasslessRuneFrame)
 
 
 
