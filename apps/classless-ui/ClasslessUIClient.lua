@@ -42,6 +42,7 @@ local function createBannerButton(name, parent, w, h, r, g, b, label)
     bg:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
     bg:SetVertexColor(r, g, b, 0.92)
     btn.Bg = bg
+    btn.baseR, btn.baseG, btn.baseB = r, g, b
     local selected = btn:CreateTexture(nil, "ARTWORK")
     selected:SetAllPoints(btn)
     selected:SetTexture("Interface\\Tooltips\\UI-Tooltip-Background")
@@ -67,6 +68,7 @@ local ui = {
     specButtons = {},
     extraButtons = {},
     navSpecButtons = {},
+    navClassBlocks = {},
     navGeneral = nil,
     navGlyph = nil,
     navPet = nil,
@@ -881,12 +883,69 @@ local function renderTalentTree(tabId, yOffset, startIndex)
     return used, (maxTier + 1) * TALENT_GAP + TALENT_OFF_Y + 24
 end
 
+local NAV_BAR_COUNT = 33
+
+local function layoutNav()
+    if not ui.sidebar or not ui.navGeneral then
+        return
+    end
+    local h = ui.sidebar:GetHeight()
+    if not h or h < NAV_BAR_COUNT then
+        return
+    end
+    local barH = h / NAV_BAR_COUNT
+    local function placeWide(btn, index)
+        btn:ClearAllPoints()
+        btn:SetHeight(barH)
+        btn:SetWidth(SIDEBAR_W)
+        btn:SetPoint("TOPLEFT", 0, -index * barH)
+    end
+    placeWide(ui.navGeneral, 0)
+    placeWide(ui.navGlyph, 1)
+    local order = Catalog and Catalog.classOrder or {}
+    local idx = 2
+    for _, classId in ipairs(order) do
+        local block = ui.navClassBlocks and ui.navClassBlocks[classId]
+        local specBtns = ui.navSpecButtons[classId]
+        if block and specBtns then
+            local blockH = barH * 3
+            block:ClearAllPoints()
+            block:SetSize(SIDEBAR_W, blockH)
+            block:SetPoint("TOPLEFT", 0, -idx * barH)
+            local iconSz = blockH
+            local bannerW = SIDEBAR_W - iconSz
+            for i = 1, 3 do
+                local btn = specBtns[i]
+                btn:ClearAllPoints()
+                btn:SetSize(bannerW, barH)
+                btn:SetPoint("TOPLEFT", 0, -((i - 1) * barH))
+            end
+            if block.ClassIcon then
+                block.ClassIcon:SetSize(iconSz, iconSz)
+                block.ClassIcon:ClearAllPoints()
+                block.ClassIcon:SetPoint("TOPRIGHT", 0, 0)
+            end
+        end
+        idx = idx + 3
+    end
+    if ui.navPet then
+        placeWide(ui.navPet, 32)
+    end
+end
+
 local function refreshNav()
     if ui.navPet then
+        ui.navPet:Show()
         if hasPetOut() then
-            ui.navPet:Show()
+            ui.navPet:Enable()
+            if ui.navPet.Bg then
+                ui.navPet.Bg:SetVertexColor(ui.navPet.baseR or 0.45, ui.navPet.baseG or 0.3, ui.navPet.baseB or 0.15, 0.92)
+            end
         else
-            ui.navPet:Hide()
+            ui.navPet:Disable()
+            if ui.navPet.Bg then
+                ui.navPet.Bg:SetVertexColor(0.22, 0.22, 0.22, 0.85)
+            end
             if ui.selectedExtra == "pet" then
                 ui.selectedExtra = nil
                 ui.selectedGeneral = true
@@ -1130,17 +1189,21 @@ local function buildFrame()
             specBtns[i] = btn
         end
         ui.navSpecButtons[classId] = specBtns
+        ui.navClassBlocks[classId] = block
         local icon = block:CreateTexture(nil, "ARTWORK")
         icon:SetSize(iconSz, iconSz)
         icon:SetPoint("TOPRIGHT", 0, 0)
         if info then
             icon:SetTexture(info.icon)
         end
+        block.ClassIcon = icon
         y = y - blockH
     end
 
     ui.navPet = addWideNav("ClasslessUINavPet", "Pet", function()
-        selectExtra("pet")
+        if hasPetOut() then
+            selectExtra("pet")
+        end
     end, 0.45, 0.3, 0.15)
     ui.navPet:SetPoint("TOPLEFT", 0, y)
     y = y - NAV_ROW_H
@@ -1162,16 +1225,20 @@ local function buildFrame()
 
     frame:SetScript("OnShow", function()
         AIO.Handle("ClasslessUIServer", "RequestState")
+        layoutNav()
         refreshNav()
         refreshPanes()
     end)
     frame:SetScript("OnSizeChanged", function()
+        layoutNav()
         if ui.talentPane then
             layoutTalentArt(ui.talentPane)
         end
     end)
+    sidebar:SetScript("OnSizeChanged", layoutNav)
 
     ui.frame = frame
+    layoutNav()
     selectSpec(ui.selectedClassId, 1)
     return frame
 end
