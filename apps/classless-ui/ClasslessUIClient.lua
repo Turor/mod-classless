@@ -85,6 +85,7 @@ local ui = {
     spellButtons = {},
     talentButtons = {},
     talentBranchPool = {},
+    talentArrowPool = {},
     spellRankSel = {},
     state = { learned = {}, learnable = {}, petLearned = {}, petOut = false, points = 0, petPoints = 0 },
 }
@@ -432,6 +433,13 @@ local function talentIsLearnable(node)
     local row = node.t or 0
     if treePointsForTab(node.tabId) < (row * 5) then
         return false
+    end
+    if node.p and node.p > 0 then
+        local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
+        local need = (node.pr or 0) + 1
+        if not dep or talentRank(dep) < need then
+            return false
+        end
     end
     return true
 end
@@ -995,9 +1003,248 @@ local function renderSpellbook(ids, pane, pool)
     hidePool(pool, #families + 1)
 end
 
+-- Stock TalentFrameBase branch/arrow atlas. 1 = met (gold), -1 = unmet (gray).
+local TALENT_BRANCH_SIZE = 32
+local MAX_TALENT_TIERS = 15
+local NUM_TALENT_COLS = 4
+local TALENT_BRANCH_TEXTURECOORDS = {
+    up = { [1] = {0.12890625, 0.25390625, 0, 0.484375}, [-1] = {0.12890625, 0.25390625, 0.515625, 1.0} },
+    down = { [1] = {0, 0.125, 0, 0.484375}, [-1] = {0, 0.125, 0.515625, 1.0} },
+    left = { [1] = {0.2578125, 0.3828125, 0, 0.5}, [-1] = {0.2578125, 0.3828125, 0.5, 1.0} },
+    right = { [1] = {0.2578125, 0.3828125, 0, 0.5}, [-1] = {0.2578125, 0.3828125, 0.5, 1.0} },
+    topright = { [1] = {0.515625, 0.640625, 0, 0.5}, [-1] = {0.515625, 0.640625, 0.5, 1.0} },
+    topleft = { [1] = {0.640625, 0.515625, 0, 0.5}, [-1] = {0.640625, 0.515625, 0.5, 1.0} },
+    bottomright = { [1] = {0.38671875, 0.51171875, 0, 0.5}, [-1] = {0.38671875, 0.51171875, 0.5, 1.0} },
+    bottomleft = { [1] = {0.51171875, 0.38671875, 0, 0.5}, [-1] = {0.51171875, 0.38671875, 0.5, 1.0} },
+    tdown = { [1] = {0.64453125, 0.76953125, 0, 0.5}, [-1] = {0.64453125, 0.76953125, 0.5, 1.0} },
+    tup = { [1] = {0.7734375, 0.8984375, 0, 0.5}, [-1] = {0.7734375, 0.8984375, 0.5, 1.0} },
+}
+local TALENT_ARROW_TEXTURECOORDS = {
+    top = { [1] = {0, 0.5, 0, 0.5}, [-1] = {0, 0.5, 0.5, 1.0} },
+    right = { [1] = {1.0, 0.5, 0, 0.5}, [-1] = {1.0, 0.5, 0.5, 1.0} },
+    left = { [1] = {0.5, 1.0, 0, 0.5}, [-1] = {0.5, 1.0, 0.5, 1.0} },
+}
+
+local function nextPooledTex(pool, parent, layer, file)
+    local i = (pool.used or 0) + 1
+    pool.used = i
+    local tex = pool[i]
+    if not tex then
+        tex = parent:CreateTexture(nil, layer)
+        pool[i] = tex
+    end
+    tex:SetTexture(file)
+    tex:SetWidth(TALENT_BRANCH_SIZE)
+    tex:SetHeight(TALENT_BRANCH_SIZE)
+    tex:Show()
+    return tex
+end
+
+local function placeTalentArt(pool, file, coords, parent, x, y)
+    if not coords then
+        return
+    end
+    local tex = nextPooledTex(pool, parent, "BACKGROUND", file)
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    tex:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+    tex:SetWidth(TALENT_BRANCH_SIZE)
+    tex:SetHeight(TALENT_BRANCH_SIZE)
+end
+
+local function emptyBranchCell()
+    return { id = nil, up = 0, left = 0, right = 0, down = 0, leftArrow = 0, rightArrow = 0, topArrow = 0 }
+end
+
+local function drawTalentLines(grid, buttonTier, buttonColumn, tier, column, met)
+    local req = met and 1 or -1
+    if buttonColumn == column then
+        for i = tier, buttonTier - 1 do
+            grid[i][buttonColumn].down = req
+            if (i + 1) <= (buttonTier - 1) then
+                grid[i + 1][buttonColumn].up = req
+            end
+        end
+        grid[buttonTier][buttonColumn].topArrow = req
+        return
+    end
+    if buttonTier == tier then
+        local left = math.min(buttonColumn, column)
+        local right = math.max(buttonColumn, column)
+        for i = left, right - 1 do
+            grid[tier][i].right = req
+            grid[tier][i + 1].left = req
+        end
+        if buttonColumn < column then
+            grid[buttonTier][buttonColumn].rightArrow = req
+        else
+            grid[buttonTier][buttonColumn].leftArrow = req
+        end
+        return
+    end
+    local left = math.min(buttonColumn, column)
+    local right = math.max(buttonColumn, column)
+    local blocked = false
+    local scanLeft, scanRight = left, right
+    if scanLeft == column then
+        scanLeft = scanLeft + 1
+    else
+        scanRight = scanRight - 1
+    end
+    for i = scanLeft, scanRight do
+        if grid[tier][i].id then
+            blocked = true
+            break
+        end
+    end
+    if not blocked then
+        for i = tier, buttonTier - 1 do
+            grid[i][buttonColumn].down = req
+            grid[i + 1][buttonColumn].up = req
+        end
+        for i = left, right - 1 do
+            grid[tier][i].right = req
+            grid[tier][i + 1].left = req
+        end
+        grid[buttonTier][buttonColumn].topArrow = req
+        return
+    end
+    for i = tier, buttonTier - 1 do
+        grid[i][column].up = req
+        grid[i + 1][column].down = req
+    end
+    if buttonColumn < column then
+        grid[buttonTier][buttonColumn].rightArrow = req
+    else
+        grid[buttonTier][buttonColumn].leftArrow = req
+    end
+    for i = left, right - 1 do
+        grid[buttonTier][i].right = req
+        grid[buttonTier][i + 1].left = req
+    end
+end
+
+local function drawTalentBranches(tabId, paneYOffset)
+    local parent = ui.talentPane and ui.talentPane.Child
+    if not parent or not tabId then
+        return
+    end
+    local nodes = Catalog and Catalog.talents and Catalog.talents[tabId] or {}
+    local grid = {}
+    for i = 1, MAX_TALENT_TIERS do
+        grid[i] = {}
+        for j = 1, NUM_TALENT_COLS do
+            grid[i][j] = emptyBranchCell()
+        end
+    end
+    for _, node in ipairs(nodes) do
+        local tier = (node.t or 0) + 1
+        local col = (node.c or 0) + 1
+        if grid[tier] and grid[tier][col] then
+            grid[tier][col].id = node.id
+        end
+    end
+    for _, node in ipairs(nodes) do
+        if node.p and node.p > 0 then
+            local dep = Catalog.talentById and Catalog.talentById[node.p]
+            if dep then
+                local need = (node.pr or 0) + 1
+                local met = talentRank(dep) >= need
+                local bTier = (node.t or 0) + 1
+                local bCol = (node.c or 0) + 1
+                local pTier = (dep.t or 0) + 1
+                local pCol = (dep.c or 0) + 1
+                if grid[bTier] and grid[bTier][bCol] and grid[pTier] and grid[pTier][pCol] then
+                    drawTalentLines(grid, bTier, bCol, pTier, pCol, met)
+                end
+            end
+        end
+    end
+    local ignoreUp = nil
+    for i = 1, MAX_TALENT_TIERS do
+        for j = 1, NUM_TALENT_COLS do
+            local node = grid[i][j]
+            local x = TALENT_OFF_X + ((j - 1) * TALENT_GAP) + 2
+            local y = paneYOffset - TALENT_OFF_Y - ((i - 1) * TALENT_GAP) - 2
+            local function branch(kind, req, ox, oy)
+                if req ~= 0 then
+                    placeTalentArt(ui.talentBranchPool, "Interface\\TalentFrame\\UI-TalentBranches",
+                        TALENT_BRANCH_TEXTURECOORDS[kind][req], parent, x + (ox or 0), y + (oy or 0))
+                end
+            end
+            local function arrow(kind, req, ox, oy)
+                if req ~= 0 then
+                    placeTalentArt(ui.talentArrowPool, "Interface\\TalentFrame\\UI-TalentArrows",
+                        TALENT_ARROW_TEXTURECOORDS[kind][req], parent, x + (ox or 0), y + (oy or 0))
+                end
+            end
+            if node.id then
+                if node.up ~= 0 then
+                    if not ignoreUp then
+                        branch("up", node.up, 0, TALENT_ICON)
+                    else
+                        ignoreUp = nil
+                    end
+                end
+                if node.down ~= 0 then
+                    branch("down", node.down, 0, -TALENT_ICON + 1)
+                end
+                if node.left ~= 0 then
+                    branch("left", node.left, -TALENT_ICON, 0)
+                end
+                if node.right ~= 0 then
+                    local tempNode = grid[i][j + 1]
+                    if tempNode and tempNode.left ~= 0 and tempNode.down < 0 then
+                        branch("right", tempNode.down, TALENT_ICON, 0)
+                    else
+                        branch("right", node.right, TALENT_ICON + 1, 0)
+                    end
+                end
+                arrow("right", node.rightArrow, TALENT_ICON / 2 + 5, 0)
+                arrow("left", node.leftArrow, -TALENT_ICON / 2 - 5, 0)
+                arrow("top", node.topArrow, 0, TALENT_ICON / 2 + 5)
+            else
+                if node.up ~= 0 and node.left ~= 0 and node.right ~= 0 then
+                    branch("tup", node.up)
+                elseif node.down ~= 0 and node.left ~= 0 and node.right ~= 0 then
+                    branch("tdown", node.down)
+                elseif node.left ~= 0 and node.down ~= 0 then
+                    branch("topright", node.left)
+                    branch("down", node.down, 0, -32)
+                elseif node.left ~= 0 and node.up ~= 0 then
+                    branch("bottomright", node.left)
+                elseif node.left ~= 0 and node.right ~= 0 then
+                    branch("right", node.right, TALENT_ICON, 0)
+                    branch("left", node.left, 1, 0)
+                elseif node.right ~= 0 and node.down ~= 0 then
+                    branch("topleft", node.right)
+                    branch("down", node.down, 0, -32)
+                elseif node.right ~= 0 and node.up ~= 0 then
+                    branch("bottomleft", node.right)
+                elseif node.up ~= 0 and node.down ~= 0 then
+                    branch("up", node.up)
+                    branch("down", node.down, 0, -32)
+                    ignoreUp = 1
+                end
+            end
+        end
+    end
+end
+
+local function hideTalentBranches()
+    hidePool(ui.talentBranchPool, 1)
+    hidePool(ui.talentArrowPool, 1)
+    ui.talentBranchPool.used = 0
+    ui.talentArrowPool.used = 0
+end
+
 local function renderTalentTree(tabId, yOffset, startIndex)
     yOffset = yOffset or 0
     startIndex = startIndex or 1
+    if startIndex == 1 then
+        ui.talentBranchPool.used = 0
+        ui.talentArrowPool.used = 0
+    end
     local nodes = Catalog and Catalog.talents and Catalog.talents[tabId] or {}
     local used = startIndex - 1
     local maxTier = 0
@@ -1040,6 +1287,7 @@ local function renderTalentTree(tabId, yOffset, startIndex)
             maxTier = node.t
         end
     end
+    drawTalentBranches(tabId, yOffset)
     return used, (maxTier + 1) * TALENT_GAP + TALENT_OFF_Y + 24
 end
 
@@ -1619,6 +1867,7 @@ function refreshPanes()
         hidePool(ui.spellButtons, 1)
         hidePool(ui.rightSpellButtons, 1)
         hidePool(ui.talentButtons, 1)
+        hideTalentBranches()
         ensureGlyphFrame()
         ui.glyphFrame:Show()
         updateGlyphFrame()
@@ -1644,6 +1893,7 @@ function refreshPanes()
             ui.talentPane.PointsOverlay:Hide()
         end
         hidePool(ui.talentButtons, 1)
+        hideTalentBranches()
         hidePool(ui.rightSpellButtons, 1)
         local all = {}
         for _, id in ipairs((Catalog and Catalog.generalSpells) or {}) do
@@ -1681,6 +1931,8 @@ function refreshPanes()
             totalHeight = totalHeight + h
         end
         hidePool(ui.talentButtons, used + 1)
+        hidePool(ui.talentBranchPool, (ui.talentBranchPool.used or 0) + 1)
+        hidePool(ui.talentArrowPool, (ui.talentArrowPool.used or 0) + 1)
         ui.talentPane.Child:SetWidth(4 * TALENT_GAP + TALENT_OFF_X + 40)
         ui.talentPane.Child:SetHeight(math.max(totalHeight + 20, 200))
         return
@@ -1698,6 +1950,8 @@ function refreshPanes()
     local tabId = spec and spec.tabId
     local used, height = renderTalentTree(tabId, 0)
     hidePool(ui.talentButtons, used + 1)
+    hidePool(ui.talentBranchPool, (ui.talentBranchPool.used or 0) + 1)
+    hidePool(ui.talentArrowPool, (ui.talentArrowPool.used or 0) + 1)
     ui.talentPane.Child:SetWidth(4 * TALENT_GAP + TALENT_OFF_X + 40)
     ui.talentPane.Child:SetHeight(math.max(height, 200))
 end
