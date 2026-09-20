@@ -757,6 +757,68 @@ local function spellBookSlotForId(spellId)
     return nil
 end
 
+local function spellCooldown(spellId)
+    if not spellId or not GetSpellCooldown then
+        return 0, 0, 0
+    end
+    local slot = spellBookSlotForId(spellId)
+    local book = bookTypeSpell()
+    if slot then
+        local start, duration, enable = GetSpellCooldown(slot, book)
+        return start or 0, duration or 0, enable or 0
+    end
+    local name = GetSpellInfo(spellId)
+    if name then
+        local start, duration, enable = GetSpellCooldown(name)
+        return start or 0, duration or 0, enable or 0
+    end
+    return 0, 0, 0
+end
+
+local function updateSpellButtonCooldown(btn)
+    local cd = btn and btn.Cooldown
+    if not cd then
+        return
+    end
+    local id = btn.family and btn.family.ids and btn.family.ids[btn.family.selected]
+    if not id or not isKnown(id) then
+        cd:Hide()
+        return
+    end
+    local start, duration, enable = spellCooldown(id)
+    if CooldownFrame_SetTimer then
+        CooldownFrame_SetTimer(cd, start, duration, enable)
+    elseif start > 0 and duration > 0 and enable ~= 0 then
+        cd:SetCooldown(start, duration)
+        cd:Show()
+    else
+        cd:Hide()
+    end
+    if btn.Icon then
+        if enable == 0 then
+            btn.Icon:SetVertexColor(0.4, 0.4, 0.4)
+        else
+            btn.Icon:SetVertexColor(1, 1, 1)
+        end
+    end
+end
+
+local function refreshSpellCooldowns()
+    local function poke(pool)
+        if not pool then
+            return
+        end
+        for i = 1, #pool do
+            local btn = pool[i]
+            if btn and btn:IsShown() then
+                updateSpellButtonCooldown(btn)
+            end
+        end
+    end
+    poke(ui.spellButtons)
+    poke(ui.rightSpellButtons)
+end
+
 local function pickupSpellId(spellId)
     if not spellId or not isKnown(spellId) then
         return
@@ -845,6 +907,14 @@ local function createSpellButton(index, parent)
     border:SetPoint("CENTER", iconBtn, "CENTER")
     border:SetTexture("Interface\\Buttons\\UI-Quickslot2")
     btn.Border = border
+
+    local cooldown = CreateFrame("Cooldown", name .. "Cooldown", iconBtn, "CooldownFrameTemplate")
+    cooldown:SetAllPoints(iconBtn)
+    if cooldown.SetReverse then
+        cooldown:SetReverse(false)
+    end
+    cooldown:Hide()
+    btn.Cooldown = cooldown
 
     local plus = iconBtn:CreateTexture(nil, "OVERLAY")
     plus:SetSize(18, 18)
@@ -1207,6 +1277,7 @@ local function renderSpellbook(ids, pane, pool)
                 end
             end
         end
+        updateSpellButtonCooldown(btn)
         btn:Show()
     end
     hidePool(pool, #families + 1)
@@ -2437,12 +2508,18 @@ events:RegisterEvent("SPELLS_CHANGED")
 events:RegisterEvent("UNIT_PET")
 events:RegisterEvent("PLAYER_TALENT_UPDATE")
 events:RegisterEvent("CHARACTER_POINTS_CHANGED")
+events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
+events:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
 local lastStateReq = 0
 events:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_PET" and unit ~= "player" then
         return
     end
     if not (ui.frame and ui.frame:IsShown()) then
+        return
+    end
+    if event == "SPELL_UPDATE_COOLDOWN" or event == "ACTIONBAR_UPDATE_COOLDOWN" then
+        refreshSpellCooldowns()
         return
     end
     local now = (GetTime and GetTime()) or 0
