@@ -7,15 +7,20 @@ local Handlers = AIO.AddHandlers("ClasslessUIClient", {})
 local Catalog = ClasslessUICatalog
 
 local FRAME_W, FRAME_H = 1000, 700
-local HEADER_CLASS_H = 100
-local HEADER_TAB_H = 52
 local PANE_PAD = 12
+local SIDEBAR_W = 210
+local NAV_ROW_H = 28
 
 local ui = {
     frame = nil,
     classButtons = {},
     specButtons = {},
     extraButtons = {},
+    navSpecButtons = {},
+    navGeneral = nil,
+    navGlyph = nil,
+    navPet = nil,
+    rightSpellButtons = {},
     selectedClassId = 6,
     selectedSpecIndex = 1,
     selectedGeneral = false,
@@ -251,8 +256,18 @@ local function isKnown(spellId)
         return false
     end
     if ui.selectedExtra == "pet" then
-        local learned = ui.state.petLearned
-        return learned and (learned[spellId] or learned[tostring(spellId)]) and true
+        local pet = ui.state.petLearned
+        if pet and (pet[spellId] or pet[tostring(spellId)]) then
+            return true
+        end
+        local learned = ui.state.learned
+        if learned and (learned[spellId] or learned[tostring(spellId)]) then
+            return true
+        end
+        if IsSpellKnown and IsSpellKnown(spellId) then
+            return true
+        end
+        return false
     end
     local learned = ui.state.learned
     if learned and (learned[spellId] or learned[tostring(spellId)]) then
@@ -479,9 +494,9 @@ local function castSpellId(spellId)
     end
 end
 
-local function createSpellButton(index)
-    local parent = ui.spellPane.Child
-    local name = "ClasslessUISpellBtn" .. index
+local function createSpellButton(index, parent)
+    parent = parent or ui.spellPane.Child
+    local name = (parent:GetName() or "ClasslessUISpell") .. "Btn" .. index
     local btn = CreateFrame("Frame", name, parent)
     btn:SetSize(SPELL_CELL_W, SPELL_CELL_H)
     btn:EnableMouse(false)
@@ -714,21 +729,23 @@ local function hidePool(pool, fromIndex)
     end
 end
 
-local function renderSpellbook(ids)
+local function renderSpellbook(ids, pane, pool)
+    pane = pane or ui.spellPane
+    pool = pool or ui.spellButtons
     local families = groupSpellFamilies(ids or {})
-    local child = ui.spellPane.Child
-    local paneW = math.max(ui.spellPane:GetWidth() - 36, SPELL_CELL_W)
+    local child = pane.Child
+    local paneW = math.max(pane:GetWidth() - 36, SPELL_CELL_W)
     local cols = math.max(2, math.floor(paneW / SPELL_CELL_W))
     local width = math.max(paneW, cols * SPELL_CELL_W)
     child:SetWidth(width)
     local rows = math.max(1, math.ceil(#families / cols))
-    child:SetHeight(math.max(rows * SPELL_CELL_H + 8, ui.spellPane:GetHeight() - 40))
+    child:SetHeight(math.max(rows * SPELL_CELL_H + 8, pane:GetHeight() - 40))
 
     for i, fam in ipairs(families) do
-        local btn = ui.spellButtons[i]
+        local btn = pool[i]
         if not btn then
-            btn = createSpellButton(i)
-            ui.spellButtons[i] = btn
+            btn = createSpellButton(i, child)
+            pool[i] = btn
         end
         btn.family = fam
         local col = (i - 1) % cols
@@ -771,7 +788,7 @@ local function renderSpellbook(ids)
         end
         btn:Show()
     end
-    hidePool(ui.spellButtons, #families + 1)
+    hidePool(pool, #families + 1)
 end
 
 local function renderTalentTree(tabId, yOffset, startIndex)
@@ -815,36 +832,33 @@ local function renderTalentTree(tabId, yOffset, startIndex)
     return used, (maxTier + 1) * TALENT_GAP + TALENT_OFF_Y + 24
 end
 
-local function refreshSpecButtons()
-    local info = classInfo(ui.selectedClassId)
-    local specs = info and info.specs or {}
-    for i = 1, 3 do
-        local btn = ui.specButtons[i]
-        local spec = specs[i]
-        if spec and not ui.selectedGeneral then
-            btn:SetText(spec.name)
-            btn.spec = spec
-            btn:Show()
-            highlightButton(btn, ui.selectedExtra == nil and ui.selectedSpecIndex == i)
+local function refreshNav()
+    if ui.navPet then
+        if hasPetOut() then
+            ui.navPet:Show()
         else
-            btn:Hide()
-            highlightButton(btn, false)
-        end
-    end
-    for _, extra in ipairs(ui.extraButtons) do
-        if extra.extraId == "pet" then
-            if hasPetOut() then
-                extra:Show()
-            else
-                extra:Hide()
-                if ui.selectedExtra == "pet" then
-                    ui.selectedExtra = nil
-                    ui.selectedSpecIndex = 1
-                    highlightButton(ui.specButtons[1], true)
-                end
+            ui.navPet:Hide()
+            if ui.selectedExtra == "pet" then
+                ui.selectedExtra = nil
+                ui.selectedGeneral = true
             end
         end
-        highlightButton(extra, extra:IsShown() and ui.selectedExtra == extra.extraId)
+    end
+    if ui.navGeneral then
+        highlightButton(ui.navGeneral, ui.selectedGeneral and not ui.selectedExtra)
+    end
+    if ui.navGlyph then
+        highlightButton(ui.navGlyph, ui.selectedExtra == "glyph")
+    end
+    if ui.navPet then
+        highlightButton(ui.navPet, ui.selectedExtra == "pet")
+    end
+    for classId, specBtns in pairs(ui.navSpecButtons) do
+        for i, btn in ipairs(specBtns) do
+            local on = not ui.selectedGeneral and not ui.selectedExtra
+                and ui.selectedClassId == classId and ui.selectedSpecIndex == i
+            highlightButton(btn, on)
+        end
     end
 end
 
@@ -871,14 +885,25 @@ function refreshPanes()
     ui.spellPane.Points:SetText("")
 
     if ui.selectedGeneral and not ui.selectedExtra then
-        ui.spellPane.Title:SetText("General spells")
-        ui.talentPane.Title:SetText("")
+        ui.spellPane.Title:SetText("General")
+        ui.talentPane.Title:SetText("General")
         setPaneTalentArt(ui.talentPane, nil)
         if ui.talentPane.PointsOverlay then
             ui.talentPane.PointsOverlay:Hide()
         end
-        renderSpellbook((Catalog and Catalog.generalSpells) or {})
         hidePool(ui.talentButtons, 1)
+        local all = (Catalog and Catalog.generalSpells) or {}
+        local fams = groupSpellFamilies(all)
+        local mid = math.ceil(#fams / 2)
+        local left, right = {}, {}
+        for i, fam in ipairs(fams) do
+            local bucket = (i <= mid) and left or right
+            for _, id in ipairs(fam.ids) do
+                bucket[#bucket + 1] = id
+            end
+        end
+        renderSpellbook(left, ui.spellPane, ui.spellButtons)
+        renderSpellbook(right, ui.talentPane, ui.rightSpellButtons)
         return
     end
 
@@ -887,15 +912,17 @@ function refreshPanes()
         ui.talentPane.Title:SetText("Glyph slots")
         setPaneTalentArt(ui.talentPane, nil)
         renderSpellbook({})
+        hidePool(ui.rightSpellButtons, 1)
         hidePool(ui.talentButtons, 1)
         return
     end
     if ui.selectedExtra == "pet" then
-        ui.spellPane.Title:SetText("Pet spells")
+        ui.spellPane.Title:SetText("Pet abilities")
         ui.talentPane.Title:SetText("Pet talents")
         local petTabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         setPaneTalentArt(ui.talentPane, petTabs[1])
-        renderSpellbook({})
+        hidePool(ui.rightSpellButtons, 1)
+        renderSpellbook((Catalog and Catalog.petSpells) or {}, ui.spellPane, ui.spellButtons)
         local tabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         local used = 0
         local totalHeight = 0
@@ -915,7 +942,8 @@ function refreshPanes()
     ui.spellPane.Title:SetText(specName .. " spells")
     ui.talentPane.Title:SetText(specName .. " talents")
     setPaneTalentArt(ui.talentPane, spec and spec.tabId)
-    renderSpellbook(ids)
+    hidePool(ui.rightSpellButtons, 1)
+    renderSpellbook(ids, ui.spellPane, ui.spellButtons)
     hidePool(ui.talentButtons, 1)
     local tabId = spec and spec.tabId
     local used, height = renderTalentTree(tabId, 0)
@@ -927,39 +955,23 @@ end
 local function selectGeneral()
     ui.selectedGeneral = true
     ui.selectedExtra = nil
-    for _, btn in ipairs(ui.classButtons) do
-        highlightButton(btn, btn.isGeneral)
-    end
-    refreshSpecButtons()
+    refreshNav()
     refreshPanes()
 end
 
-local function selectClass(classId)
+local function selectSpec(classId, index)
     ui.selectedClassId = classId
-    ui.selectedSpecIndex = 1
-    ui.selectedGeneral = false
-    ui.selectedExtra = nil
-    for _, btn in ipairs(ui.classButtons) do
-        highlightButton(btn, not btn.isGeneral and btn.classId == classId)
-    end
-    refreshSpecButtons()
-    refreshPanes()
-end
-
-local function selectSpec(index)
     ui.selectedSpecIndex = index
     ui.selectedGeneral = false
     ui.selectedExtra = nil
-    for _, btn in ipairs(ui.classButtons) do
-        highlightButton(btn, not btn.isGeneral and btn.classId == ui.selectedClassId)
-    end
-    refreshSpecButtons()
+    refreshNav()
     refreshPanes()
 end
 
 local function selectExtra(extraId)
     ui.selectedExtra = extraId
-    refreshSpecButtons()
+    ui.selectedGeneral = false
+    refreshNav()
     refreshPanes()
 end
 
@@ -1018,81 +1030,79 @@ local function buildFrame()
     local close = CreateFrame("Button", "ClasslessUIFrameClose", frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
 
-    local classRow = CreateFrame("Frame", "ClasslessUIClassRow", frame)
-    classRow:SetPoint("TOPLEFT", 20, -36)
-    classRow:SetPoint("TOPRIGHT", -20, -36)
-    classRow:SetHeight(HEADER_CLASS_H)
+    local sidebar = CreateFrame("ScrollFrame", "ClasslessUISidebar", frame, "UIPanelScrollFrameTemplate")
+    sidebar:SetPoint("TOPRIGHT", -28, -36)
+    sidebar:SetPoint("BOTTOMRIGHT", -28, PANE_PAD)
+    sidebar:SetWidth(SIDEBAR_W)
+    local nav = CreateFrame("Frame", "ClasslessUINav", sidebar)
+    nav:SetWidth(SIDEBAR_W - 8)
+    nav:SetHeight(1)
+    sidebar:SetScrollChild(nav)
+    ui.sidebar = sidebar
 
-    local order = Catalog and Catalog.classOrder or {}
-    local count = #order + 1
-    local btnW = 56
-    local gap = 8
-    local totalW = count * btnW + math.max(count - 1, 0) * gap
-
-    local function layoutClassRow()
-        local startX = math.max((frame:GetWidth() - 40 - totalW) / 2, 0)
-        for i, btn in ipairs(ui.classButtons) do
-            btn:ClearAllPoints()
-            btn:SetPoint("TOPLEFT", startX + (i - 1) * (btnW + gap), 0)
-        end
+    local function addWideNav(name, label, onClick)
+        local btn = createTabButton(name, nav, SIDEBAR_W - 24, NAV_ROW_H)
+        btn:SetText(label)
+        btn:SetScript("OnClick", onClick)
+        return btn
     end
 
-    local genBtn = createIconButton("ClasslessUIClassGeneral", classRow, btnW, 80, 48)
-    genBtn:SetPoint("TOPLEFT", 0, 0)
-    genBtn.isGeneral = true
-    genBtn.Icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
-    genBtn.Label:SetText("General")
-    genBtn:SetScript("OnClick", function()
-        selectGeneral()
+    local y = 0
+    ui.navGeneral = addWideNav("ClasslessUINavGeneral", "General", selectGeneral)
+    ui.navGeneral:SetPoint("TOPLEFT", 0, y)
+    y = y - (NAV_ROW_H + 4)
+
+    ui.navGlyph = addWideNav("ClasslessUINavGlyph", "Glyphs", function()
+        selectExtra("glyph")
     end)
-    ui.classButtons[#ui.classButtons + 1] = genBtn
+    ui.navGlyph:SetPoint("TOPLEFT", 0, y)
+    y = y - (NAV_ROW_H + 8)
 
-    for i, classId in ipairs(order) do
+    local specW = 52
+    local iconSz = 24
+    local order = Catalog and Catalog.classOrder or {}
+    for _, classId in ipairs(order) do
         local info = classInfo(classId)
-        local btn = createIconButton("ClasslessUIClass" .. classId, classRow, btnW, 80, 48)
-        btn:SetPoint("TOPLEFT", 0, 0)
-        btn.classId = classId
-        if info then
-            btn.Icon:SetTexture(info.icon)
-            btn.Label:SetText(info.name)
+        local row = CreateFrame("Frame", "ClasslessUINavClass" .. classId, nav)
+        row:SetSize(SIDEBAR_W - 16, NAV_ROW_H)
+        row:SetPoint("TOPLEFT", 0, y)
+        local specBtns = {}
+        for i = 1, 3 do
+            local spec = info and info.specs and info.specs[i]
+            local btn = createTabButton("ClasslessUINavSpec" .. classId .. "_" .. i, row, specW, NAV_ROW_H - 2)
+            btn:SetPoint("LEFT", (i - 1) * (specW + 2), 0)
+            btn:SetText(spec and spec.name or tostring(i))
+            local fs = btn:GetFontString()
+            if fs then
+                fs:SetFontObject(GameFontNormalSmall)
+            end
+            local capturedClass, capturedSpec = classId, i
+            btn:SetScript("OnClick", function()
+                selectSpec(capturedClass, capturedSpec)
+            end)
+            specBtns[i] = btn
         end
-        btn:SetScript("OnClick", function()
-            selectClass(classId)
-        end)
-        ui.classButtons[#ui.classButtons + 1] = btn
+        ui.navSpecButtons[classId] = specBtns
+        local icon = row:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(iconSz, iconSz)
+        icon:SetPoint("RIGHT", 0, 0)
+        if info then
+            icon:SetTexture(info.icon)
+        end
+        y = y - (NAV_ROW_H + 4)
     end
 
-    local tabRow = CreateFrame("Frame", "ClasslessUITabRow", frame)
-    tabRow:SetPoint("TOPLEFT", 16, -36 - HEADER_CLASS_H)
-    tabRow:SetPoint("TOPRIGHT", -16, -36 - HEADER_CLASS_H)
-    tabRow:SetHeight(HEADER_TAB_H)
+    ui.navPet = addWideNav("ClasslessUINavPet", "Pet", function()
+        selectExtra("pet")
+    end)
+    ui.navPet:SetPoint("TOPLEFT", 0, y)
+    y = y - (NAV_ROW_H + 4)
+    nav:SetHeight(math.abs(y) + 8)
 
-    local tabW, tabH, tabGap = 140, 36, 8
-    for i = 1, 3 do
-        local btn = createTabButton("ClasslessUISpec" .. i, tabRow, tabW, tabH)
-        btn:SetPoint("LEFT", (i - 1) * (tabW + tabGap), 0)
-        btn:SetScript("OnClick", function()
-            selectSpec(i)
-        end)
-        ui.specButtons[i] = btn
-    end
-
-    local extras = Catalog and Catalog.extraTabs or {}
-    for i, extra in ipairs(extras) do
-        local btn = createTabButton("ClasslessUIExtra" .. extra.id, tabRow, tabW, tabH)
-        btn:SetPoint("LEFT", (3 + i - 1) * (tabW + tabGap), 0)
-        btn:SetText(extra.name)
-        btn.extraId = extra.id
-        btn:SetScript("OnClick", function()
-            selectExtra(extra.id)
-        end)
-        ui.extraButtons[#ui.extraButtons + 1] = btn
-    end
-
-    local bodyTop = -(36 + HEADER_CLASS_H + HEADER_TAB_H + 4)
     local body = CreateFrame("Frame", "ClasslessUIBody", frame)
-    body:SetPoint("TOPLEFT", PANE_PAD, bodyTop)
-    body:SetPoint("BOTTOMRIGHT", -PANE_PAD, PANE_PAD)
+    body:SetPoint("TOPLEFT", PANE_PAD, -36)
+    body:SetPoint("BOTTOMLEFT", PANE_PAD, PANE_PAD)
+    body:SetPoint("RIGHT", sidebar, "LEFT", -10, 0)
 
     ui.spellPane = createScrollPane("ClasslessUISpellPane", body, "Spells")
     ui.spellPane:SetPoint("TOPLEFT")
@@ -1106,18 +1116,17 @@ local function buildFrame()
 
     frame:SetScript("OnShow", function()
         AIO.Handle("ClasslessUIServer", "RequestState")
+        refreshNav()
         refreshPanes()
     end)
     frame:SetScript("OnSizeChanged", function()
-        layoutClassRow()
         if ui.talentPane then
             layoutTalentArt(ui.talentPane)
         end
     end)
 
     ui.frame = frame
-    layoutClassRow()
-    selectClass(ui.selectedClassId)
+    selectSpec(ui.selectedClassId, 1)
     return frame
 end
 
@@ -1174,7 +1183,7 @@ function Handlers.ApplyState(player, state)
         }
     end
     if ui.frame and ui.frame:IsShown() then
-        refreshSpecButtons()
+        refreshNav()
         refreshPanes()
     end
 end
