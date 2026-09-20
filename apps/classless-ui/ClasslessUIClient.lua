@@ -10,8 +10,6 @@ local Catalog = ClasslessUICatalog
 local FRAME_W, FRAME_H = 800, 560
 local PANE_PAD = 12
 local SIDEBAR_W = 210
-local FILIGREE_W = 14
-local FILIGREE_TEX = "Interface\\AddOns\\ClasslessUIAddons\\textures\\FiligreeBorder"
 local NAV_ROW_H = 14
 local NAV_SPEC_GAP = 0
 local CLASS_FILE = {
@@ -181,13 +179,14 @@ local function layoutTalentArt(pane)
     if not q or not q.holder or not q.holder:IsShown() then
         return
     end
-    local w = pane:GetWidth() - 8
-    local h = pane:GetHeight() - 8
+    local w = pane:GetWidth()
+    local h = pane:GetHeight()
     if w < 16 or h < 16 then
         return
     end
     q.holder:ClearAllPoints()
-    q.holder:SetPoint("TOPLEFT", pane, "TOPLEFT", 4, -4)
+    q.holder:SetPoint("TOPLEFT", pane, "TOPLEFT", 0, 0)
+    q.holder:SetPoint("BOTTOMRIGHT", pane, "BOTTOMRIGHT", 0, 0)
     q.holder:SetWidth(w)
     q.holder:SetHeight(h)
     local tlw = w * (TALENT_ART_TL_W / TALENT_ART_TOTAL_W)
@@ -212,8 +211,8 @@ local function ensureTalentArt(pane)
         return pane.TalentQuads
     end
     local holder = CreateFrame("Frame", nil, pane)
-    holder:SetPoint("TOPLEFT", 4, -4)
-    holder:SetPoint("BOTTOMRIGHT", -4, 4)
+    holder:SetPoint("TOPLEFT", 0, 0)
+    holder:SetPoint("BOTTOMRIGHT", 0, 0)
     holder:SetFrameLevel(pane:GetFrameLevel())
     local function makeTex()
         local tex = holder:CreateTexture(nil, "BACKGROUND")
@@ -1099,12 +1098,7 @@ function refreshPanes()
         ui.spellPane:SetPoint("TOPRIGHT")
         ui.spellPane:SetPoint("BOTTOMRIGHT")
         ui.talentPane:Hide()
-        if ui.filigreeMid then
-            ui.filigreeMid:Hide()
-        end
-        if ui.filigreeSide then
-            ui.filigreeSide:Show()
-        end
+
         ui.spellPane.Title:SetText("General")
         setPaneTalentArt(ui.talentPane, nil)
         if ui.talentPane.PointsOverlay then
@@ -1131,12 +1125,6 @@ function refreshPanes()
     ui.talentPane:SetPoint("BOTTOMRIGHT")
     ui.talentPane:SetPoint("LEFT", ui.talentPane:GetParent(), "CENTER", 0, 0)
     ui.talentPane:Show()
-    if ui.filigreeMid then
-        ui.filigreeMid:Show()
-    end
-    if ui.filigreeSide then
-        ui.filigreeSide:Show()
-    end
 
     if ui.selectedExtra == "glyph" then
         ui.spellPane.Title:SetText(className .. " glyphs")
@@ -1347,53 +1335,14 @@ local function buildFrame()
     ui.talentPane:SetPoint("BOTTOMRIGHT")
     ui.talentPane:SetPoint("LEFT", body, "CENTER", 0, 0)
 
-    local overlay = CreateFrame("Frame", "ClasslessUIFiligreeLayer", body)
-    overlay:SetAllPoints(body)
-    overlay:EnableMouse(false)
-    overlay:SetFrameLevel((ui.spellPane:GetFrameLevel() or body:GetFrameLevel()) + 5)
-    local function makeFiligree(name)
-        local tex = overlay:CreateTexture(name, "OVERLAY")
-        tex:SetWidth(FILIGREE_W)
-        tex:SetTexture(FILIGREE_TEX)
-        tex:SetTexCoord(0, 1, 0, 1)
-        return tex
-    end
-    ui.filigreeMid = makeFiligree("ClasslessUIFiligreeMid")
-    ui.filigreeMid:SetPoint("TOP", overlay, "TOP", 0, 0)
-    ui.filigreeMid:SetPoint("BOTTOM", overlay, "BOTTOM", 0, 0)
-    ui.filigreeMid:SetPoint("CENTER", overlay, "CENTER", 0, 0)
-    ui.filigreeSide = makeFiligree("ClasslessUIFiligreeSide")
-    ui.filigreeSide:SetPoint("TOPRIGHT", overlay, "TOPRIGHT", 0, 0)
-    ui.filigreeSide:SetPoint("BOTTOMRIGHT", overlay, "BOTTOMRIGHT", 0, 0)
-
-    local function layoutFiligree()
-        if not ui.body then
-            return
-        end
-        local h = ui.body:GetHeight()
-        if not h or h < 8 then
-            return
-        end
-        if ui.filigreeMid then
-            ui.filigreeMid:SetWidth(FILIGREE_W)
-            ui.filigreeMid:SetHeight(h)
-        end
-        if ui.filigreeSide then
-            ui.filigreeSide:SetWidth(FILIGREE_W)
-            ui.filigreeSide:SetHeight(h)
-        end
-    end
-
     frame:SetScript("OnShow", function()
         AIO.Handle("ClasslessUIServer", "RequestState")
         layoutNav()
-        layoutFiligree()
         refreshNav()
         refreshPanes()
     end)
     frame:SetScript("OnSizeChanged", function()
         layoutNav()
-        layoutFiligree()
         if ui.talentPane then
             layoutTalentArt(ui.talentPane)
         end
