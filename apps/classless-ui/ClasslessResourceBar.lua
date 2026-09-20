@@ -35,8 +35,14 @@ local function applyRuneCooldownMs(i, remMs)
         local total = math.max(10, rem)
         btn.cooldown:SetCooldown(GetTime() - (total - rem), total)
         btn.cooldown:Show()
+        if btn.cdCircle then
+            btn.cdCircle:Show()
+        end
     else
         btn.cooldown:Hide()
+        if btn.cdCircle then
+            btn.cdCircle:Hide()
+        end
     end
 end
 
@@ -339,29 +345,25 @@ for i = 1, RUNE_COUNT do
         "ClasslessRune" .. i .. "Icon",
         "ARTWORK"
     )
-    runeTex:SetSize(24, 24)
-    runeTex:SetPoint("CENTER", rune, "CENTER", 0, -1)
+    runeTex:SetSize(RUNE_SIZE, RUNE_SIZE)
+    runeTex:SetPoint("CENTER", rune, "CENTER", 0, 0)
     runeTex:SetTexture(classlessRuneIconTextures[runeType])
 
-
-    -- ============================================================
-    -- Border Frame
-    -- ============================================================
+    -- Ring sits above the cooldown so the swipe reads as a circle.
     local border = CreateFrame(
         "Frame",
         "ClasslessRune" .. i .. "Border",
         rune
     )
-    border:SetSize(18, 18)
-    border:SetPoint("CENTER", rune, "CENTER", 0, -1)
-    border:SetFrameLevel(rune:GetFrameLevel()-1)
+    border:SetSize(RUNE_SIZE, RUNE_SIZE)
+    border:SetPoint("CENTER", rune, "CENTER", 0, 0)
 
     local borderTex = border:CreateTexture(
         "ClasslessRune" .. i .. "BorderTexture",
         "OVERLAY"
     )
     borderTex:SetAllPoints(border)
-    borderTex:SetTexture(classlessRuneTextures[runeType])
+    borderTex:SetTexture("Interface\\PlayerFrame\\UI-PlayerFrame-Deathknight-Ring")
     borderTex:SetVertexColor(0.6, 0.6, 0.6, 1)
     border.borderTex = borderTex
 
@@ -388,21 +390,39 @@ for i = 1, RUNE_COUNT do
     shineTex:SetTexCoord(0.5625, 1, 0, 1)
     shine.shineTex = shineTex
 
-    -- Stock RuneButton cooldown is a raw Cooldown (not CooldownFrameTemplate,
-    -- which is hidden). Cover the 24px icon so the swipe is visible.
+    -- Circular cooldown overlay: diameter = RUNE_SIZE (radius size/2), on top
+    -- of the rune art. A portrait mask crops the square swipe to a circle.
     local cd = CreateFrame(
         "Cooldown",
         "ClasslessRune" .. i .. "Cooldown",
         rune
     )
     cd:ClearAllPoints()
-    cd:SetAllPoints(rune)
-    cd:SetFrameStrata("LOW")
+    cd:SetSize(RUNE_SIZE, RUNE_SIZE)
+    cd:SetPoint("CENTER", rune, "CENTER", 0, 0)
     if cd.SetDrawEdge then
         cd:SetDrawEdge(true)
     end
-    cd:SetFrameLevel(rune:GetFrameLevel() + 2)
+    cd:SetFrameLevel(rune:GetFrameLevel() + 4)
     cd:Hide()
+
+    local crop = cd:CreateTexture("ClasslessRune" .. i .. "Crop", "OVERLAY")
+    crop:SetSize(RUNE_SIZE, RUNE_SIZE)
+    crop:SetPoint("CENTER", cd, "CENTER", 0, 0)
+    crop:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+    crop:SetBlendMode("MOD")
+    cd.crop = crop
+
+    -- Explicit circular dimmer on top of the rune (radius = size/2).
+    local circle = rune:CreateTexture("ClasslessRune" .. i .. "CdCircle", "OVERLAY")
+    circle:SetSize(RUNE_SIZE, RUNE_SIZE)
+    circle:SetPoint("CENTER", rune, "CENTER", 0, 0)
+    circle:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+    circle:SetVertexColor(0, 0, 0, 0.55)
+    circle:Hide()
+    rune.cdCircle = circle
+
+    border:SetFrameLevel(cd:GetFrameLevel() + 1)
 
 
     -- ============================================================
