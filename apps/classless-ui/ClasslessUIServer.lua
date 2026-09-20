@@ -264,7 +264,7 @@ local function collectLearned(player)
     return learned
 end
 
-local function collectPetLearned(pet)
+local function collectPetLearned(player, pet)
     local learned = {}
     if not pet then
         return learned
@@ -282,10 +282,17 @@ local function collectPetLearned(pet)
             local nodes = Catalog.talents and Catalog.talents[tabId]
             if nodes then
                 for _, node in ipairs(nodes) do
-                    for i = 1, #node.r do
-                        local spellId = node.r[i]
-                        if unitHasSpell(pet, spellId) then
-                            learned[spellId] = true
+                    local rank = 0
+                    if player and player.GetClasslessPetTalentRank then
+                        rank = tonumber(player:GetClasslessPetTalentRank(node.id)) or 0
+                    else
+                        rank = highestKnownTalentRank(function(id)
+                            return unitHasSpell(pet, id)
+                        end, node)
+                    end
+                    for i = 1, rank do
+                        if node.r[i] then
+                            learned[node.r[i]] = true
                         end
                     end
                 end
@@ -628,9 +635,11 @@ local function sendState(player)
     end
     local pet = player:GetPet()
     local petPoints = 0
-    local petOk, petVal = pcall(petFreeTalentPoints, player, pet)
-    if petOk and type(petVal) == "number" then
-        petPoints = petVal
+    if player.GetClasslessPetFreePoints then
+        local ok, v = pcall(player.GetClasslessPetFreePoints, player)
+        if ok then
+            petPoints = tonumber(v) or 0
+        end
     end
     local costs, altCosts = collectTrainCosts(player)
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
@@ -639,7 +648,7 @@ local function sendState(player)
         reqLevels = collectReqLevels(player),
         costs = costs,
         altCosts = altCosts,
-        petLearned = collectPetLearned(pet),
+        petLearned = collectPetLearned(player, pet),
         petOut = pet ~= nil,
         petTabs = collectPetTalentTabs(player),
         points = points,
@@ -752,55 +761,16 @@ function Handlers.LearnTalent(player, talentId, rank)
         return
     end
     if isPetTabId(node.tabId) then
-        local pet = player:GetPet()
-        if not pet then
-            player:SendBroadcastMessage("You need a pet out to learn pet talents.")
+        if not player.ClasslessPetLearnTalent then
+            player:SendBroadcastMessage("Pet talent learn is unavailable (server needs a rebuild).")
             return
         end
-        local hasFn = function(id)
-            return unitHasSpell(pet, id)
-        end
-        if hasFn(spellId) or hasFn(node.r[maxRank]) then
+        local ok, learned = pcall(player.ClasslessPetLearnTalent, player, talentId, rank)
+        if not ok or not learned then
+            player:SendBroadcastMessage("Can't learn that pet talent.")
             sendState(player)
             return
         end
-        local points = 0
-        local petOk, petVal = pcall(petFreeTalentPoints, player, pet)
-        if petOk and type(petVal) == "number" then
-            points = petVal
-        end
-        if points < 1 then
-            player:SendBroadcastMessage("No pet talent points remaining.")
-            return
-        end
-        local ok, err = talentPrereqsOk(player, hasFn, node, rank)
-        if not ok then
-            player:SendBroadcastMessage(err)
-            return
-        end
-        if hasFn(spellId) then
-            sendState(player)
-            return
-        end
-        local usedBefore = 0
-        if pet.GetUsedTalentCount then
-            usedBefore = tonumber(pet:GetUsedTalentCount()) or 0
-        end
-        if player.LearnPetTalent then
-            player:LearnPetTalent(pet:GetGUID(), talentId, rank - 1)
-        end
-        if not unitHasSpell(pet, spellId) and pet.LearnSpell then
-            pet:LearnSpell(spellId)
-        end
-        local usedAfter = usedBefore
-        if pet.GetUsedTalentCount then
-            usedAfter = tonumber(pet:GetUsedTalentCount()) or 0
-        end
-        if usedAfter <= usedBefore and pet.SetUsedTalentCount then
-            pet:SetUsedTalentCount(usedBefore + 1)
-        end
-        petFreeTalentPoints(player, pet)
-        persistPet(player)
         sendState(player)
         return
     end
@@ -850,41 +820,16 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         return
     end
     if isPetTabId(node.tabId) then
-        local pet = player:GetPet()
-        if not pet then
+        if not player.ClasslessPetUnlearnTalent then
+            player:SendBroadcastMessage("Pet talent unlearn is unavailable (server needs a rebuild).")
             return
         end
-        local hasFn = function(id)
-            return unitHasSpell(pet, id)
-        end
-        local current = highestKnownTalentRank(hasFn, node)
-        if current < 1 then
+        local ok, dropped = pcall(player.ClasslessPetUnlearnTalent, player, talentId)
+        if not ok or not dropped then
+            player:SendBroadcastMessage("Can't unlearn that pet talent; it would leave a later talent dangling.")
+            sendState(player)
             return
         end
-        local orphaned, err = unlearnWouldOrphan(player, hasFn, node, true)
-        if orphaned then
-            player:SendBroadcastMessage(err)
-            return
-        end
-        local spellId = node.r[current]
-        local usedBefore = 0
-        if pet.GetUsedTalentCount then
-            usedBefore = tonumber(pet:GetUsedTalentCount()) or 0
-        end
-        if pet.UnlearnSpell then
-            pet:UnlearnSpell(spellId, current > 1, true)
-        elseif pet.RemoveSpell then
-            pet:RemoveSpell(spellId, current > 1, true)
-        end
-        local usedAfter = usedBefore
-        if pet.GetUsedTalentCount then
-            usedAfter = tonumber(pet:GetUsedTalentCount()) or 0
-        end
-        if usedAfter >= usedBefore and usedBefore > 0 and pet.SetUsedTalentCount then
-            pet:SetUsedTalentCount(usedBefore - 1)
-        end
-        petFreeTalentPoints(player, pet)
-        persistPet(player)
         sendState(player)
         return
     end
