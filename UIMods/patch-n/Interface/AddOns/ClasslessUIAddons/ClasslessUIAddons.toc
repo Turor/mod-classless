@@ -2,7 +2,7 @@
 ## Title: Classless UI Addons
 ## Notes: Addon that comes with the patches in order to display the energy and rage of players
 ## DefaultState: enabled
-## SavedVariablesPerCharacter: Energy_Textures, Energy_ShowText, Rage_Textures, Rage_ShowText, ConfigFrame_vari
+## SavedVariablesPerCharacter: Energy_Textures, Energy_ShowText, Rage_Textures, Rage_ShowText, Mana_Textures, Mana_ShowText, Runic_Textures, Runic_ShowText, ConfigFrame_varis
 
 TalentsAndSpellbook.lua
 TalentsAndSpellbook.xml

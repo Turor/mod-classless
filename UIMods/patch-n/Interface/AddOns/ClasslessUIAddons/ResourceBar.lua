@@ -61,9 +61,11 @@ end
 function ClasslessRuneButton_Update (self, classlessRuneType, dontFlash)
 	local runeType = self.runeType
 
-	if ( (not dontFlash) and (classlessRuneType) and (classlessRuneType ~= self.rune.runeType)) then
-		self.shineTex:SetVertexColor(unpack(classlessRuneColors[runeType]));
-		ClasslessRuneButton_ShineFadeIn(self.shineTex)
+	if ( (not dontFlash) and (classlessRuneType) and (classlessRuneType ~= self.runeType)) then
+		if self.shine and self.shine.shineTex then
+			self.shine.shineTex:SetVertexColor(unpack(classlessRuneColors[runeType] or classlessRuneColors[1]));
+			ClasslessRuneButton_ShineFadeIn(self.shine)
+		end
 	end
 
 	if (classlessRuneType) then
@@ -102,8 +104,14 @@ function ClasslessRuneFrame_OnEvent (self, event, ...)
 		end
 	elseif ( event == "RUNE_TYPE_UPDATE" ) then
         local rune = ...;
-        if ( rune ) then
-            ClasslessRuneButton_Update(self.runes[rune], rune);
+        if ( rune and self.runes[rune] ) then
+            local t = GetRuneType and GetRuneType(rune)
+            ClasslessRuneButton_Update(self.runes[rune], t or self.runes[rune].runeType);
+        end
+    elseif ( event == "PLAYER_ENTERING_WORLD" ) then
+        for i = 1, #(self.runes or {}) do
+            local t = GetRuneType and GetRuneType(i)
+            ClasslessRuneButton_Update(self.runes[i], t or self.runes[i].runeType, true);
         end
     end
 end
@@ -280,9 +288,13 @@ for i = 1, RUNE_COUNT do
     cd:SetSize(15,15)
     cd:ClearAllPoints()
     cd:SetPoint("CENTER", rune, "CENTER", 0, -1)
-    cd:SetDrawEdge(true)
+    if cd.SetDrawEdge then
+        cd:SetDrawEdge(true)
+    end
     cd:SetFrameLevel(rune:GetFrameLevel() + 2)
-    cd:SetReverse(true)
+    if cd.SetReverse then
+        cd:SetReverse(true)
+    end
     cd:Show()
 
 
@@ -330,6 +342,7 @@ ClasslessRuneFrame:RegisterEvent("RUNE_TYPE_UPDATE");
 ClasslessRuneFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 
 ClasslessRuneFrame:SetScript("OnEvent", ClasslessRuneFrame_OnEvent);
+ClasslessRuneFrame:Show();
 
 
 
@@ -453,6 +466,7 @@ RunicFrame:SetSize(100, 20)
 RunicStatusBar = CreateFrame("StatusBar", nil, RunicFrame)
 RunicStatusBar:SetPoint("LEFT")
 RunicStatusBar:SetPoint("RIGHT", 0, 0)
+RunicStatusBar:SetHeight(20)
 RunicStatusBar:SetMinMaxValues(0, 100)
 RunicStatusBar:SetStatusBarColor(0, 0.82, 1) -- Standard Runic Power Cyan
 
@@ -790,7 +804,7 @@ function init_loadUp()
     RunicGSlider:SetValue(Runic_Textures[2] * 100)
     RunicBSlider:SetValue(Runic_Textures[3] * 100)
 
-	MainFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3] * 3 + 2)
+	MainFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3] * 4 + 2)
 	EnergyFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3])
 	EnergyStatusBar:SetHeight(ConfigFrame_varis[3])
 	RageFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3])
