@@ -35,8 +35,9 @@ for class_id, specs in SPEC_SKILLS.items():
 
 # Combat/racial/profession skill lines that populate the Blizzard General tab.
 GENERAL_SKILLS = {
-    45, 46, 95, 101, 118, 124, 125, 126, 129, 162, 176, 220, 226, 228,
-    733, 753, 754, 756, 760,
+    45, 46, 95, 101, 118, 124, 125, 126, 129, 162, 164, 165, 171, 176,
+    182, 185, 186, 197, 202, 220, 226, 228, 333, 356, 393, 733, 753, 754,
+    755, 756, 760, 773,
 }
 
 # Hunter/warlock/DK pet skill lines — these are pet abilities, not General.

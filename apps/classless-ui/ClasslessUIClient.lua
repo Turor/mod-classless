@@ -788,13 +788,28 @@ local function renderSpellbook(ids, pane, pool)
     pane = pane or ui.spellPane
     pool = pool or ui.spellButtons
     local families = groupSpellFamilies(ids or {})
+    local compact = ui.selectedGeneral and not ui.selectedExtra
+    if compact then
+        for _, fam in ipairs(families) do
+            local best = fam.ids[1]
+            for _, id in ipairs(fam.ids) do
+                if isKnown(id) then
+                    best = id
+                end
+            end
+            fam.ids = { best }
+            fam.selected = 1
+        end
+    end
     local child = pane.Child
-    local paneW = math.max(pane:GetWidth() - 36, SPELL_CELL_W)
-    local cols = math.max(2, math.floor(paneW / SPELL_CELL_W))
-    local width = math.max(paneW, cols * SPELL_CELL_W)
+    local cellW = compact and 52 or SPELL_CELL_W
+    local cellH = compact and 52 or SPELL_CELL_H
+    local paneW = math.max(pane:GetWidth() - 36, cellW)
+    local cols = math.max(2, math.floor(paneW / cellW))
+    local width = math.max(paneW, cols * cellW)
     child:SetWidth(width)
     local rows = math.max(1, math.ceil(#families / cols))
-    child:SetHeight(math.max(rows * SPELL_CELL_H + 8, pane:GetHeight() - 40))
+    child:SetHeight(math.max(rows * cellH + 8, pane:GetHeight() - 40))
 
     for i, fam in ipairs(families) do
         local btn = pool[i]
@@ -805,8 +820,9 @@ local function renderSpellbook(ids, pane, pool)
         btn.family = fam
         local col = (i - 1) % cols
         local row = math.floor((i - 1) / cols)
+        btn:SetSize(cellW, cellH)
         btn:ClearAllPoints()
-        btn:SetPoint("TOPLEFT", 4 + col * SPELL_CELL_W, -4 - row * SPELL_CELL_H)
+        btn:SetPoint("TOPLEFT", 4 + col * cellW, -4 - row * cellH)
         local sel = fam.selected or 1
         local id = fam.ids[sel]
         local _, _, icon = GetSpellInfo(id)
@@ -814,31 +830,48 @@ local function renderSpellbook(ids, pane, pool)
         if btn.Icon.SetDesaturated then
             btn.Icon:SetDesaturated(not isKnown(id))
         end
-        btn.RankText:SetText(sel .. "/" .. #fam.ids)
-        if sel > 1 then
-            btn.Prev:Enable()
+        btn.IconBtn:ClearAllPoints()
+        if compact then
+            btn.IconBtn:SetPoint("CENTER", 0, 0)
+            btn.Prev:Hide()
+            btn.Next:Hide()
+            btn.RankText:SetText("")
+            if btn.LevelText then
+                btn.LevelText:SetText("")
+            end
+            if btn.Plus then
+                btn.Plus:Hide()
+            end
         else
-            btn.Prev:Disable()
-        end
-        if sel < #fam.ids then
-            btn.Next:Enable()
-        else
-            btn.Next:Disable()
-        end
-        if btn.LevelText then
-            btn.LevelText:SetText("")
-            if not isKnown(id) and not isLearnable(id) then
-                local req = reqLevel(id)
-                if req and req > 0 then
-                    btn.LevelText:SetText(tostring(req))
+            btn.IconBtn:SetPoint("CENTER", 0, 6)
+            btn.Prev:Show()
+            btn.Next:Show()
+            btn.RankText:SetText(sel .. "/" .. #fam.ids)
+            if sel > 1 then
+                btn.Prev:Enable()
+            else
+                btn.Prev:Disable()
+            end
+            if sel < #fam.ids then
+                btn.Next:Enable()
+            else
+                btn.Next:Disable()
+            end
+            if btn.LevelText then
+                btn.LevelText:SetText("")
+                if not isKnown(id) and not isLearnable(id) then
+                    local req = reqLevel(id)
+                    if req and req > 0 then
+                        btn.LevelText:SetText(tostring(req))
+                    end
                 end
             end
-        end
-        if btn.Plus then
-            if isLearnable(id) then
-                btn.Plus:Show()
-            else
-                btn.Plus:Hide()
+            if btn.Plus then
+                if isLearnable(id) then
+                    btn.Plus:Show()
+                else
+                    btn.Plus:Hide()
+                end
             end
         end
         btn:Show()
