@@ -33,6 +33,12 @@ for class_id, specs in SPEC_SKILLS.items():
     for spec_id, skill in specs.items():
         SKILL_TO_SPEC[skill] = (class_id, spec_id)
 
+# Combat/racial/profession skill lines that populate the Blizzard General tab.
+GENERAL_SKILLS = {
+    45, 46, 95, 101, 118, 124, 125, 126, 129, 162, 176, 220, 226, 228,
+    733, 753, 754, 756, 760,
+}
+
 # Hunter/warlock/DK pet skill lines — these are pet abilities, not General.
 PET_SKILLS = {
     188, 189, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214,
@@ -124,14 +130,25 @@ def main():
         )
 
     ATTR0_PASSIVE = 0x00000040
-    spell_passive = {}
+    # Hidden in UI — not visible in spellbook or aura bar (Spell.dbc attributes bit 7).
+    ATTR0_DO_NOT_DISPLAY = 0x00000080
+    spell_attr0 = {}
     spell_sql = DMLS / "Spell.sql"
+    spell_text = ""
     if spell_sql.exists():
         spell_text = spell_sql.read_text(encoding="utf-8", errors="replace")
         for m in re.finditer(
             r"\((\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)", spell_text
         ):
-            spell_passive[int(m.group(1))] = (int(m.group(5)) & ATTR0_PASSIVE) != 0
+            spell_attr0[int(m.group(1))] = int(m.group(5))
+
+    def in_spellbook(spell_id):
+        if spell_id in BLOCKED_SPELLS:
+            return False
+        return (spell_attr0.get(spell_id, 0) & ATTR0_DO_NOT_DISPLAY) == 0
+
+    def is_passive(spell_id):
+        return (spell_attr0.get(spell_id, 0) & ATTR0_PASSIVE) != 0
 
     trainer_by_class = load_trainer_spells(Path(__file__).resolve().parent / "class_trainer_spells.txt")
     trainer_all = set()
@@ -175,7 +192,7 @@ def main():
 
     for class_id, trained in trainer_by_class.items():
         for spell in trained:
-            if spell in BLOCKED_SPELLS:
+            if not in_spellbook(spell):
                 continue
             spec_id = resolve_spec(class_id, spell)
             if spec_id:
@@ -186,9 +203,6 @@ def main():
                 if spell not in pet_seen:
                     pet_spells.append(spell)
                     pet_seen.add(spell)
-            elif spell not in general_seen:
-                general.append(spell)
-                general_seen.add(spell)
 
     # Spell.dbc SpellFamilyName (spell_class_set) -> ChrClasses. Classless SLA
     # dumps class_mask=-1, so family is what keeps Smite off paladin Holy.
@@ -197,7 +211,7 @@ def main():
     }
     start_ids = set()
     for spell, entries in sla_by_spell.items():
-        if any(acq == 2 and not spell_passive.get(spell, False) for _sk, acq in entries):
+        if any(acq == 2 and not is_passive(spell) for _sk, acq in entries):
             start_ids.add(spell)
 
     def parse_sql_fields(chunk):
@@ -251,13 +265,13 @@ def main():
                 break
 
     for spell, entries in sla_by_spell.items():
-        if spell in BLOCKED_SPELLS:
+        if not in_spellbook(spell):
             continue
         is_start = False
         sla_class = None
         sla_spec = None
         for skill, acq in entries:
-            if acq == 2 and not spell_passive.get(spell, False):
+            if acq == 2 and not is_passive(spell):
                 is_start = True
                 mapped = SKILL_TO_SPEC.get(skill)
                 if mapped:
@@ -274,16 +288,27 @@ def main():
             continue
         spec_id = resolve_spec(class_id, spell) or sla_spec
         if not spec_id:
-            if spell_is_pet(spell):
-                if spell not in pet_seen:
-                    pet_spells.append(spell)
-                    pet_seen.add(spell)
-            elif spell not in general_seen:
-                general.append(spell)
-                general_seen.add(spell)
+            if spell_is_pet(spell) and spell not in pet_seen:
+                pet_spells.append(spell)
+                pet_seen.add(spell)
             continue
         spells[class_id][spec_id].append(spell)
         placed[class_id].add(spell)
+
+    # Blizzard General tab: racials, Dodge/Parry/Block, Dual Wield, Shoot/Throw,
+    # First Aid, plus hardcoded Auto Attack and Turoran extras. SPELL_ATTR0_DO_NOT_DISPLAY
+    # already excluded. Weapon/armor skill leftover is not General.
+    for spell, entries in sla_by_spell.items():
+        if not in_spellbook(spell):
+            continue
+        if any(sk in GENERAL_SKILLS for sk, _acq in entries):
+            if spell not in general_seen:
+                general.append(spell)
+                general_seen.add(spell)
+    for extra in (6603, 2764, 3018, 5019, 360001, 360002, 360003):
+        if in_spellbook(extra) and extra not in general_seen:
+            general.append(extra)
+            general_seen.add(extra)
 
     for class_id in spells:
         for spec_id in spells[class_id]:
