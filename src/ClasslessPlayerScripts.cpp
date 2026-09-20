@@ -124,6 +124,7 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
                     player->learnSpell(spellInfo->Effects[i].TriggerSpell);
 
         player->addTalent(spellId, player->GetActiveSpecMask(), currentTalentRank);
+        player->UpgradeActionButtonsForLearnedSpell(spellId);
 
         if (!command) player->SetFreeTalentPoints(CurTalentPoints - talentPointsChange);
 
