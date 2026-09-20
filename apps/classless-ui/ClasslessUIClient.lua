@@ -612,6 +612,20 @@ local function createSpellButton(index, parent)
     rankFs:SetPoint("TOP", iconBtn, "BOTTOM", 0, -1)
     btn.RankText = rankFs
 
+    local nameFs = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    nameFs:SetPoint("TOP", btn, "TOP", 0, -1)
+    nameFs:SetWidth(SPELL_CELL_W - 4)
+    nameFs:SetJustifyH("CENTER")
+    nameFs:SetText("")
+    btn.NameText = nameFs
+
+    local subFs = btn:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    subFs:SetPoint("BOTTOM", btn, "BOTTOM", 0, 1)
+    subFs:SetWidth(SPELL_CELL_W - 4)
+    subFs:SetJustifyH("CENTER")
+    subFs:SetText("")
+    btn.SubText = subFs
+
     local hilight = iconBtn:CreateTexture(nil, "HIGHLIGHT")
     hilight:SetAllPoints(iconBtn)
     hilight:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
@@ -802,8 +816,8 @@ local function renderSpellbook(ids, pane, pool)
         end
     end
     local child = pane.Child
-    local cellW = compact and 52 or SPELL_CELL_W
-    local cellH = compact and 52 or SPELL_CELL_H
+    local cellW = compact and 88 or SPELL_CELL_W
+    local cellH = compact and 78 or SPELL_CELL_H
     local paneW = math.max(pane:GetWidth() - 36, cellW)
     local cols = math.max(2, math.floor(paneW / cellW))
     local width = math.max(paneW, cols * cellW)
@@ -825,7 +839,7 @@ local function renderSpellbook(ids, pane, pool)
         btn:SetPoint("TOPLEFT", 4 + col * cellW, -4 - row * cellH)
         local sel = fam.selected or 1
         local id = fam.ids[sel]
-        local _, _, icon = GetSpellInfo(id)
+        local spellName, spellSub, icon = GetSpellInfo(id)
         btn.Icon:SetTexture(icon or fam.icon)
         if btn.Icon.SetDesaturated then
             btn.Icon:SetDesaturated(not isKnown(id))
@@ -836,6 +850,16 @@ local function renderSpellbook(ids, pane, pool)
             btn.Prev:Hide()
             btn.Next:Hide()
             btn.RankText:SetText("")
+            if btn.NameText then
+                btn.NameText:SetWidth(cellW - 4)
+                btn.NameText:SetText(spellName or fam.name or "")
+                btn.NameText:Show()
+            end
+            if btn.SubText then
+                btn.SubText:SetWidth(cellW - 4)
+                btn.SubText:SetText(spellSub or "")
+                btn.SubText:Show()
+            end
             if btn.LevelText then
                 btn.LevelText:SetText("")
             end
@@ -844,6 +868,14 @@ local function renderSpellbook(ids, pane, pool)
             end
         else
             btn.IconBtn:SetPoint("CENTER", 0, 6)
+            if btn.NameText then
+                btn.NameText:SetText("")
+                btn.NameText:Hide()
+            end
+            if btn.SubText then
+                btn.SubText:SetText("")
+                btn.SubText:Hide()
+            end
             btn.Prev:Show()
             btn.Next:Show()
             btn.RankText:SetText(sel .. "/" .. #fam.ids)
