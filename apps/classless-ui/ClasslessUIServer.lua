@@ -6,6 +6,21 @@ end
 local Handlers = AIO.AddHandlers("ClasslessUIServer", {})
 local Catalog = ClasslessUICatalog
 
+local function classlessEnabled()
+    if not GetConfigValue then
+        return true
+    end
+    local v = GetConfigValue("ClasslessModule.Enable")
+    return v == true or v == 1
+end
+
+local function pushEnabled(player)
+    if player then
+        AIO.Handle(player, "ClasslessUIClient", "SetEnabled", classlessEnabled())
+        AIO.Handle(player, "ClasslessResourceBar", "SetEnabled", classlessEnabled())
+    end
+end
+
 local function spellName(spellId)
     if not LookupEntry then
         return nil
@@ -514,6 +529,10 @@ local function sendState(player)
 end
 
 function Handlers.RequestState(player)
+    if not classlessEnabled() then
+        pushEnabled(player)
+        return
+    end
     if not player then
         return
     end
@@ -521,6 +540,9 @@ function Handlers.RequestState(player)
 end
 
 function Handlers.LearnSpell(player, spellId)
+    if not classlessEnabled() then
+        return
+    end
     spellId = tonumber(spellId)
     if type(spellId) ~= "number" or not player then
         return
@@ -544,6 +566,9 @@ function Handlers.LearnSpell(player, spellId)
 end
 
 function Handlers.CastSpell(player, spellId)
+    if not classlessEnabled() then
+        return
+    end
     spellId = tonumber(spellId)
     if type(spellId) ~= "number" or not player then
         return
@@ -582,6 +607,9 @@ local function talentPrereqsOk(player, hasFn, node, rank)
 end
 
 function Handlers.LearnTalent(player, talentId, rank)
+    if not classlessEnabled() then
+        return
+    end
     talentId = tonumber(talentId)
     rank = tonumber(rank)
     if type(talentId) ~= "number" or type(rank) ~= "number" or not player then
@@ -672,6 +700,9 @@ function Handlers.LearnTalent(player, talentId, rank)
 end
 
 function Handlers.UnlearnTalent(player, talentId, rank)
+    if not classlessEnabled() then
+        return
+    end
     talentId = tonumber(talentId)
     rank = tonumber(rank)
     if type(talentId) ~= "number" or not player then
@@ -739,9 +770,21 @@ end
 
 local function OnCommand(event, player, command)
     if command == "classless" then
+        pushEnabled(player)
+        if not classlessEnabled() then
+            if player then
+                player:SendBroadcastMessage("Classless module is disabled.")
+            end
+            return false
+        end
         AIO.Handle(player, "ClasslessUIClient", "ShowUI")
         return false
     end
 end
 
 RegisterPlayerEvent(42, OnCommand)
+if RegisterPlayerEvent then
+    RegisterPlayerEvent(3, function(_, player)
+        pushEnabled(player)
+    end)
+end

@@ -1,4 +1,5 @@
 #include "ClasslessSpellTrainCost.h"
+#include "ClasslessConfig.h"
 
 #include "Config.h"
 #include "Player.h"
@@ -31,7 +32,7 @@ uint32 Classless_TryChargeSpellTrainCost(Player* player, uint32 spellId)
     if (!player)
         return uint32(ClasslessSpellTrainChargeResult::Ok);
 
-    if (!sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false))
+    if (!Classless_IsEnabled())
         return uint32(ClasslessSpellTrainChargeResult::Ok);
 
     ClasslessSpellTrainCost const cost = Classless_LookupSpellTrainCost(spellId);

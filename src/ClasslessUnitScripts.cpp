@@ -1,4 +1,5 @@
 #include "ClasslessUnitScripts.h"
+#include "ClasslessConfig.h"
 
 #include "SharedDefines.h"
 #include "SpellMgr.h"
@@ -9,7 +10,7 @@ ClasslessUnitScripts::ClasslessUnitScripts() : UnitScript("ClasslessUnitScript")
 }
 
 bool ClasslessUnitScripts::OnExtraProcHandleReactionStates(Unit* unit, Unit* target, bool isVictim, uint32 procs) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         // If exist crit/parry/dodge/block need update aura state (for victim and attacker)
         if (procs)
         {

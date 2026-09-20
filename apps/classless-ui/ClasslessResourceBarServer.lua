@@ -3,6 +3,14 @@ if not AIO.IsMainState() then
     return
 end
 
+local function classlessEnabled()
+    if not GetConfigValue then
+        return true
+    end
+    local v = GetConfigValue("ClasslessModule.Enable")
+    return v == true or v == 1
+end
+
 -- The 3.3.5 client only updates GetRuneCooldown for UnitClass DK.
 -- Classless IsClass(ABILITY) inits runes for every class, so remaining CD
 -- is pushed from here.
@@ -17,7 +25,7 @@ local function runeReadyBit(mask, i)
 end
 
 local function pushRuneCooldowns(player)
-    if not player then
+    if not classlessEnabled() or not player then
         return
     end
     local cds = {}
@@ -53,6 +61,9 @@ local function pushRuneCooldowns(player)
 end
 
 function Handlers.RequestRuneCooldowns(player)
+    if not classlessEnabled() then
+        return
+    end
     if player then
         lastRuneKey[player.GetGUIDLow and player:GetGUIDLow() or tostring(player)] = nil
         pushRuneCooldowns(player)

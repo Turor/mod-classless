@@ -1,4 +1,5 @@
 #include "ClasslessPlayerScripts.h"
+#include "ClasslessConfig.h"
 #include "ClasslessTalent.h"
 #include "Player.h"
 #include "Config.h"
@@ -21,15 +22,12 @@ void ClasslessPlayerScripts::SetTalentYieldAchievements(std::unordered_set<uint3
 }
 
 void ClasslessPlayerScripts::OnPlayerLogin(Player *player) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled())
         ChatHandler(player->GetSession()).PSendSysMessage(HELLO_WORLD);
-        if (player && !player->m_runes)
-            player->InitRunes();
-    }
 }
 
 Optional<bool> ClasslessPlayerScripts::OnPlayerIsClass(Player const *, Classes classes, ClassContext context) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         switch (context) {
             case CLASS_CONTEXT_QUEST:
             case CLASS_CONTEXT_TAXI:
@@ -55,7 +53,7 @@ Optional<bool> ClasslessPlayerScripts::OnPlayerIsClass(Player const *, Classes c
 
 bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *player, uint32 talentId, uint32 talentRank,
                                                                     bool command) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         // ... original logic kept unchanged ...
         uint32 CurTalentPoints = player->GetFreeTalentPoints();
         if (!command) {
@@ -137,7 +135,7 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
 
 void ClasslessPlayerScripts::OnPlayerTalentsReset(Player* player, bool /*noCost*/)
 {
-    if (!sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false) || !player)
+    if (!Classless_IsEnabled() || !player)
         return;
     // Trainer wipe only clears m_talents. Classless ranks also live in m_spells
     // and would keep costing points / showing as known after the reset.
@@ -145,19 +143,25 @@ void ClasslessPlayerScripts::OnPlayerTalentsReset(Player* player, bool /*noCost*
 }
 
 void ClasslessPlayerScripts::OnPlayerCalculateTalentsPoints(Player const *player, uint32 &talentPointsForLevel) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
-        uint32 talentPoints = player->GetLevel();
+    if (!Classless_IsEnabled())
+        return;
+    uint32 talentPoints = player->GetLevel();
+    float const scalar = Classless_AchievementTalentPointScalar();
+    if (scalar != 0.0f && player->GetAchievementMgr())
+    {
+        uint32 matching = 0;
         CompletedAchievementMap const &completed = player->GetAchievementMgr()->GetCompletedAchievements();
         for (auto const &kv: completed)
             if (achievements_which_yield_talents_.find(kv.first) != achievements_which_yield_talents_.end())
-                ++talentPoints;
-        talentPointsForLevel = talentPoints;
+                ++matching;
+        talentPoints += static_cast<uint32>(matching * scalar);
     }
+    talentPointsForLevel = talentPoints;
 }
 
 bool ClasslessPlayerScripts::OnUpdateAttackPowerAndDamageReplaceWithAlternativeCalculation(
     Player *player, bool ranged) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         float baseAttackPower = 0.0f;
         float level = float(player->GetLevel());
 
@@ -307,14 +311,14 @@ bool ClasslessPlayerScripts::OnUpdateAttackPowerAndDamageReplaceWithAlternativeC
 }
 
 bool ClasslessPlayerScripts::OnPlayerHasActivePowerType(Player const */*player*/, Powers /*power*/) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         return true;
     }
     return false;
 }
 
 bool ClasslessPlayerScripts::OnPlayerUpdateParryUseAlternative(Player* player) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         player->SetCanParry(true);
         const float parry_cap = 145.560408f;
         const float m_diminishing_k =  0.9880f;
@@ -352,7 +356,7 @@ bool ClasslessPlayerScripts::OnPlayerUpdateParryUseAlternative(Player* player) {
 }
 
 bool ClasslessPlayerScripts::OnPlayerUpdateDodgeUseAlternative(Player *player) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         const float dodge_cap = 150.375940f;
         const float m_diminishing_k =  0.9880f;
         float m_realDodge = player->GetFloatValue(PLAYER_DODGE_PERCENTAGE);
@@ -406,7 +410,7 @@ bool ClasslessPlayerScripts::OnPlayerUpdateDodgeUseAlternative(Player *player) {
 }
 
 void ClasslessPlayerScripts::OnPlayerBeforeGuardianInitStatsForLevel(Player* /*player*/, Guardian* guardian, CreatureTemplate const* cinfo, PetType& petType) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         if (guardian->IsPet()) {
             switch (cinfo->Entry) {
                 case NPC_IMP:
@@ -427,7 +431,7 @@ void ClasslessPlayerScripts::OnPlayerBeforeGuardianInitStatsForLevel(Player* /*p
 }
 
 void ClasslessPlayerScripts::OnPlayerAfterGuardianInitStatsForLevel(Player *, Guardian *guardian) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         // -- 8875, 19580, 19581, 19582, 19589, 19590, 34666, 34667, 34675, 55566
         if (guardian->IsPet()) {
             if (!guardian->IsHunterPet()) { // Add Hunter Pet Scaling Auras

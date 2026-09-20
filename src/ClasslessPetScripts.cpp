@@ -3,6 +3,7 @@
 //
 
 #include "ClasslessPetScripts.h"
+#include "ClasslessConfig.h"
 
 #include "Pet.h"
 #include "Player.h"
@@ -12,7 +13,7 @@ ClasslessPetScripts::ClasslessPetScripts(ClasslessPlayerScripts* cps) : PetScrip
 }
 
 void ClasslessPetScripts::OnCalculateMaxTalentPointsForLevel(Pet *pet, uint8 level, uint8 &points) {
-    if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
+    if (Classless_IsEnabled()) {
         Player* owner = pet->GetOwner();
         if (!owner)
             return;

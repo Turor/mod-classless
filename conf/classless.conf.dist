@@ -9,9 +9,24 @@
 ########################################
 #
 #    ClasslessModule.Enable
-#        Description: Enable classless wow module
+#        Description: Enable classless wow module (cross-class talents/spells,
+#                     classless UI, resource bar, pet talent scaling).
 #        Default:     0 - Disabled
 #                     1 - Enabled
 #
 
 ClasslessModule.Enable = 1
+
+#
+#    ClasslessModule.AchievementTalentPoints
+#        Description: Scalar applied to each completed achievement listed in
+#                     acore_world.classless_achievements_which_yield_talents.
+#                     Added on top of 1 talent point per level.
+#                     0 disables achievement talent points.
+#                     Ignored when ClasslessModule.Enable is 0.
+#        Default:     1.0  (one talent point per listed achievement)
+#                     0    (off)
+#                     0.5  (half a point per achievement, truncated)
+#
+
+ClasslessModule.AchievementTalentPoints = 1.0

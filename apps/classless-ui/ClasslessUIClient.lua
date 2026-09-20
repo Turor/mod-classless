@@ -5,6 +5,7 @@ end
 
 local Handlers = AIO.AddHandlers("ClasslessUIClient", {})
 local Catalog = ClasslessUICatalog
+local moduleEnabled = true
 
 -- Narrowest layout: 2 spell cols + 4 talent cols + 210px sidebar.
 local FRAME_W, FRAME_H = 800, 560
@@ -2420,7 +2421,17 @@ local function buildFrame()
     return frame
 end
 
+function Handlers.SetEnabled(_, enabled)
+    moduleEnabled = enabled == true or enabled == 1
+    if not moduleEnabled and ui.frame then
+        ui.frame:Hide()
+    end
+end
+
 function Handlers.ShowUI(player)
+    if not moduleEnabled then
+        return
+    end
     local frame = buildFrame()
     frame:Show()
     AIO.Handle("ClasslessUIServer", "RequestState")
@@ -2532,6 +2543,10 @@ end)
 
 SLASH_CLASSLESSUI1 = "/classless"
 SlashCmdList["CLASSLESSUI"] = function()
+    if not moduleEnabled then
+        print("Classless module is disabled.")
+        return
+    end
     local frame = buildFrame()
     if frame:IsShown() then
         frame:Hide()

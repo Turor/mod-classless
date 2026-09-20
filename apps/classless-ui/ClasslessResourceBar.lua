@@ -11,6 +11,18 @@ end
 
 local ResourceBar = AIO.AddHandlers("ClasslessResourceBar", {})
 local pendingRuneCds
+local moduleEnabled = true
+
+function ResourceBar.SetEnabled(_, enabled)
+    moduleEnabled = enabled == true or enabled == 1
+    if ClasslessResourceFrame then
+        if moduleEnabled then
+            ClasslessResourceFrame:Show()
+        else
+            ClasslessResourceFrame:Hide()
+        end
+    end
+end
 
 local function applyRuneCooldownMs(i, remMs)
     local btn = ClasslessRunes and ClasslessRunes[i]
@@ -38,6 +50,9 @@ local function applyPendingRuneCds()
 end
 
 function ResourceBar.ApplyRuneCooldowns(player, cds)
+    if not moduleEnabled then
+        return
+    end
     pendingRuneCds = cds
     applyPendingRuneCds()
 end

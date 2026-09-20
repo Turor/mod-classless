@@ -1,4 +1,5 @@
 #include "ClasslessTalent.h"
+#include "ClasslessConfig.h"
 
 #include "Config.h"
 #include "DBCStores.h"
@@ -98,7 +99,7 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
 {
     if (!player || !dropSpellId || dropSpellId == keepSpellId)
         return false;
-    if (!sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false))
+    if (!Classless_IsEnabled())
         return false;
 
     uint8 specMask = player->GetActiveSpecMask();

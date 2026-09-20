@@ -1,4 +1,5 @@
 #include "ClasslessDatastoreInitializationScripts.h"
+#include "ClasslessConfig.h"
 #include "ClasslessSpellTrainCost.h"
 
 #include "ScriptMgr.h"
@@ -7,16 +8,30 @@
 #include <unordered_set>
 
 void ClasslessDatastoreInitializationScripts::OnAfterDatabasesLoaded(uint32) {
+    if (!Classless_IsEnabled())
+    {
+        LOG_INFO("server.loading", "Classless module disabled; skipping classless datastore");
+        if (cps_)
+            cps_->SetTalentYieldAchievements({});
+        Classless_SetSpellTrainCosts({});
+        return;
+    }
+
     uint32 oldMSTime = getMSTime();
     std::unordered_set<uint32> ids;
-    LOG_INFO("server.loading", "Loading achievements for talent point calculations");
-    if (QueryResult r = WorldDatabase.Query("SELECT achievement_id FROM acore_world.classless_achievements_which_yield_talents")) {
-        do { ids.insert(r->Fetch()[0].Get<uint32>()); } while (r->NextRow());
-    } else {
-        LOG_ERROR("server.loading", "Could not load achievements for talent point calculations");
+    if (Classless_AchievementTalentPointsEnabled())
+    {
+        LOG_INFO("server.loading", "Loading achievements for talent point calculations");
+        if (QueryResult r = WorldDatabase.Query("SELECT achievement_id FROM acore_world.classless_achievements_which_yield_talents")) {
+            do { ids.insert(r->Fetch()[0].Get<uint32>()); } while (r->NextRow());
+        } else {
+            LOG_ERROR("server.loading", "Could not load achievements for talent point calculations");
+        }
+        LOG_INFO("server.loading", ">> Loaded achievements for talent point calculations in {} ms", GetMSTimeDiffToNow(oldMSTime));
     }
+    else
+        LOG_INFO("server.loading", "Skipping achievement talent points (ClasslessModule.AchievementTalentPoints = 0)");
     if (cps_) cps_->SetTalentYieldAchievements(ids);
-    LOG_INFO("server.loading", ">> Loaded achievements for talent point calculations in {} ms", GetMSTimeDiffToNow(oldMSTime));
 
     oldMSTime = getMSTime();
     std::unordered_map<uint32, ClasslessSpellTrainCost> costs;
