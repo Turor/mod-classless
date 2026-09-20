@@ -25,9 +25,10 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | spell-cost-cell | Unlearned spell cells show gold (and item currency) under name then rank/passive. Red if the player cannot pay. Known ranks hide the line. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | resource-bar | Live `Interface/AddOns/ClasslessUIAddons/ResourceBar.lua` was the old energy/rage/mana stack (no runes). Restored the patch-n rune grid + runic bar; MainFrame height is 4 bars. | Strip XML from MPQ, N-key hook |
 | 2026-09-19 | aio-resource | Resource bar is AIO `ClasslessResourceBar.lua`. ClasslessUIAddons lua/xml/toc stripped from patch-n; only parchment + bar TGAs remain. Native Linux `mpqcli` packs the MPQ. | N-key hook |
-| 2026-09-20 | n-p-hook | `ToggleSpellBook` (P) and `ToggleTalentFrame` (N) open ClasslessUI instead of the stock book/talent frames. `/classless` still toggles. | Strip leftover XML if any |
+| 2026-09-20 | n-p-hook | `ToggleSpellBook` (P) and `ToggleTalentFrame` (N) open ClasslessUI instead of the stock book/talent frames. `/classless` still toggles. | |
 | 2026-09-20 | cp-classless | ConsolePort plugin + menu Spec/Spellbook buttons open ClasslessUI. Stock SpellBookFrame/PlayerTalentFrame OnShow redirects. | |
 | 2026-09-20 | pet-row-prefix | Pet tree row k unlocks when `sum(n[0]..n[k-1]) >= 3k` (same prefix rule as player 5k), not 3 points in the previous row only. C++ + client/server Lua. | |
+| 2026-09-20 | framexml-legacy | Stock FrameXML overrides left `patch-n.mpq`. Kept under `apps/classless-ui/legacy/FrameXML/` (not packed). Client uses base MPQ FrameXML; N/P still open ClasslessUI. | |
 
 ## Why a new system
 
@@ -59,6 +60,7 @@ modules/mod-classless/apps/classless-ui/
   ClasslessUIClient.lua       -- AIO.AddAddon client UI
   ClasslessUIServer.lua       -- AIO.IsMainState handlers
   ClasslessResourceBar.lua    -- AIO.AddAddon energy/rage/mana/runic HUD
+  legacy/FrameXML/            -- old patch-n FrameXML overrides; not packed
 ```
 
 Deploy:
@@ -74,7 +76,7 @@ Keep `lua_scripts/AIO_Server` in place. After client-Lua changes, players need `
 
 AIO channels: client `ClasslessUIClient`, server `ClasslessUIServer`.
 
-**ClasslessUIAddons is not a loadable addon.** `/classless` and the resource bar are AIO. `patch-n.mpq` only keeps `Interface/AddOns/ClasslessUIAddons/textures/{SpellbookParchment,normTex,Minimalist}.tga`. `TalentsAndSpellbook.*` and `ClasslessTalentFrameBase.lua` are gone.
+**ClasslessUIAddons is not a loadable addon.** `/classless` and the resource bar are AIO. `patch-n.mpq` only keeps `Interface/AddOns/ClasslessUIAddons/textures/{SpellbookParchment,normTex,Minimalist}.tga`. `TalentsAndSpellbook.*` and `ClasslessTalentFrameBase.lua` are gone. Do not pack `legacy/FrameXML/` (old `UIParent.lua` / spellbook / pet / talent FrameXML). The client falls back to stock 3.3.5 FrameXML from the base MPQs.
 
 ## Frame layout
 
