@@ -1094,6 +1094,10 @@ local GLYPH_SLOTS = {
     [5] = { left = 0.26171875, right = 0.390625, top = 0.87109375, bottom = 1 },
     [6] = { left = 0.654296875, right = 0.783203125, top = 0.87109375, bottom = 1 },
 }
+-- Stock GlyphFrame is 384x512; sockets sit on that canvas in a hex.
+-- Keep the same offsets on a centered 384x512 holder so the pattern
+-- matches the original page without using the framed atlas crop.
+local GLYPH_LAYOUT_W, GLYPH_LAYOUT_H = 384, 512
 local GLYPH_SOCKET_LAYOUT = {
     { id = 1, point = "CENTER", x = -15, y = 140 },
     { id = 2, point = "CENTER", x = -14, y = -103 },
@@ -1420,33 +1424,28 @@ local function ensureGlyphFrame()
     end
     local parent = ui.body
     local frame = CreateFrame("Frame", "ClasslessUIGlyphFrame", parent)
-    frame:SetWidth(384)
-    frame:SetHeight(512)
-    frame:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    frame:SetPoint("TOPLEFT")
+    frame:SetPoint("BOTTOMRIGHT")
     frame:EnableMouse(true)
-    if frame.SetHitRectInsets then
-        frame:SetHitRectInsets(0, 30, 0, 70)
-    end
     frame:Hide()
 
-    local bookIcon = frame:CreateTexture(nil, "BACKGROUND")
-    bookIcon:SetTexture("Interface\\Spellbook\\Spellbook-Icon")
-    sizeTex(bookIcon, 58, 58)
-    bookIcon:SetPoint("TOPLEFT", 10, -8)
+    local paper = frame:CreateTexture(nil, "BACKGROUND")
+    paper:SetAllPoints(frame)
+    paper:SetTexture("Interface\\AddOns\\ClasslessUIAddons\\textures\\SpellbookParchment")
+    frame.paper = paper
 
-    local bg = frame:CreateTexture(nil, "ARTWORK")
-    bg:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
-    sizeTex(bg, 352, 441)
-    bg:SetPoint("TOPLEFT")
-    bg:SetTexCoord(0, 0.6875, 0, 0.861328125)
-    frame.bg = bg
-
-    local title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    title:SetPoint("CENTER", 6, 230)
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOP", 0, -8)
     title:SetText((type(GLYPHS) == "string" and GLYPHS) or "Glyphs")
     frame.title = title
 
-    local glow = frame:CreateTexture(nil, "OVERLAY")
+    local layout = CreateFrame("Frame", "ClasslessUIGlyphLayout", frame)
+    layout:SetWidth(GLYPH_LAYOUT_W)
+    layout:SetHeight(GLYPH_LAYOUT_H)
+    layout:SetPoint("CENTER", frame, "CENTER", 0, -8)
+    frame.layout = layout
+
+    local glow = layout:CreateTexture(nil, "ARTWORK")
     glow:SetTexture("Interface\\Spellbook\\UI-GlyphFrame-Glow")
     sizeTex(glow, 352, 441)
     glow:SetPoint("TOPLEFT", -9, -38)
@@ -1456,11 +1455,11 @@ local function ensureGlyphFrame()
     frame.glow = glow
 
     if SparkleFrame and SparkleFrame.New then
-        frame.sparkleFrame = SparkleFrame:New(frame)
+        frame.sparkleFrame = SparkleFrame:New(layout)
     end
 
-    for _, layout in ipairs(GLYPH_SOCKET_LAYOUT) do
-        ui.glyphSockets[layout.id] = createGlyphSocket(frame, layout.id, layout.point, layout.x, layout.y)
+    for _, slot in ipairs(GLYPH_SOCKET_LAYOUT) do
+        ui.glyphSockets[slot.id] = createGlyphSocket(layout, slot.id, slot.point, slot.x, slot.y)
     end
 
     frame:SetScript("OnShow", function()
