@@ -74,6 +74,8 @@ local ui = {
     navGlyph = nil,
     navPet = nil,
     rightSpellButtons = {},
+    glyphFrame = nil,
+    glyphSockets = {},
     selectedClassId = 6,
     selectedSpecIndex = 1,
     selectedGeneral = false,
@@ -1069,6 +1071,465 @@ local function refreshNav()
     end
 end
 
+-- Stock Blizzard_GlyphUI.xml / .lua, rebuilt with CreateFrame.
+local GLYPHTYPE_MAJOR = 1
+local GLYPHTYPE_MINOR = 2
+local GLYPH_MINOR = { r = 0, g = 0.25, b = 1 }
+local GLYPH_MAJOR = { r = 1, g = 0.25, b = 0 }
+local NUM_GLYPH_SLOTS = 6
+local HIGHLIGHT_BASEALPHA = 0.4
+local GLYPHFRAME_PULSEIN, GLYPHFRAME_PULSEOUT, GLYPHFRAME_FINISHED = 0.2, 0.2, 1.5
+local GLYPH_SLOTS = {
+    [0] = { left = 0.78125, right = 0.91015625, top = 0.69921875, bottom = 0.828125 },
+    [1] = { left = 0, right = 0.12890625, top = 0.87109375, bottom = 1 },
+    [2] = { left = 0.130859375, right = 0.259765625, top = 0.87109375, bottom = 1 },
+    [3] = { left = 0.392578125, right = 0.521484375, top = 0.87109375, bottom = 1 },
+    [4] = { left = 0.5234375, right = 0.65234375, top = 0.87109375, bottom = 1 },
+    [5] = { left = 0.26171875, right = 0.390625, top = 0.87109375, bottom = 1 },
+    [6] = { left = 0.654296875, right = 0.783203125, top = 0.87109375, bottom = 1 },
+}
+local GLYPH_SOCKET_LAYOUT = {
+    { id = 1, point = "CENTER", x = -15, y = 140 },
+    { id = 2, point = "CENTER", x = -14, y = -103 },
+    { id = 3, point = "TOPLEFT", x = 28, y = -133 },
+    { id = 4, point = "BOTTOMRIGHT", x = -56, y = 168 },
+    { id = 5, point = "TOPRIGHT", x = -56, y = -133 },
+    { id = 6, point = "BOTTOMLEFT", x = 26, y = 168 },
+}
+local slotAnimations = {
+    [1] = { point = "CENTER", xStart = -13, xStop = -13, yStart = 17, yStop = 100 },
+    [2] = { point = "CENTER", xStart = -13, xStop = -13, yStart = 17, yStop = -64 },
+    [3] = { point = "CENTER", xStart = -13, xStop = -85, yStart = 17, yStop = 60 },
+    [4] = { point = "CENTER", xStart = -13, xStop = 61, yStart = 18, yStop = -27 },
+    [5] = { point = "CENTER", xStart = -13, xStop = 59, yStart = 17, yStop = 60 },
+    [6] = { point = "CENTER", xStart = -13, xStop = -87, yStart = 18, yStop = -27 },
+}
+
+local function sizeTex(tex, w, h)
+    if tex then
+        tex:SetWidth(w)
+        tex:SetHeight(h)
+    end
+end
+
+local function setGlyphType(glyph, glyphType)
+    glyph.glyphType = glyphType
+    glyph.setting:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    if glyphType == GLYPHTYPE_MAJOR then
+        glyph.glyph:SetVertexColor(GLYPH_MAJOR.r, GLYPH_MAJOR.g, GLYPH_MAJOR.b)
+        sizeTex(glyph.setting, 108, 108)
+        glyph.setting:SetTexCoord(0.740234375, 0.953125, 0.484375, 0.697265625)
+        sizeTex(glyph.highlight, 108, 108)
+        glyph.highlight:SetTexCoord(0.740234375, 0.953125, 0.484375, 0.697265625)
+        sizeTex(glyph.ring, 82, 82)
+        glyph.ring:ClearAllPoints()
+        glyph.ring:SetPoint("CENTER", glyph, "CENTER", 0, -1)
+        glyph.ring:SetTexCoord(0.767578125, 0.92578125, 0.32421875, 0.482421875)
+        glyph.shine:SetTexCoord(0.9609375, 1, 0.9609375, 1)
+        sizeTex(glyph.background, 70, 70)
+    else
+        glyph.glyph:SetVertexColor(GLYPH_MINOR.r, GLYPH_MINOR.g, GLYPH_MINOR.b)
+        sizeTex(glyph.setting, 86, 86)
+        glyph.setting:SetTexCoord(0.765625, 0.927734375, 0.15625, 0.31640625)
+        sizeTex(glyph.highlight, 86, 86)
+        glyph.highlight:SetTexCoord(0.765625, 0.927734375, 0.15625, 0.31640625)
+        sizeTex(glyph.ring, 62, 62)
+        glyph.ring:ClearAllPoints()
+        glyph.ring:SetPoint("CENTER", glyph, "CENTER", 0, 1)
+        glyph.ring:SetTexCoord(0.787109375, 0.908203125, 0.033203125, 0.154296875)
+        glyph.shine:SetTexCoord(0.9609375, 1, 0.921875, 0.9609375)
+        sizeTex(glyph.background, 64, 64)
+    end
+end
+
+local function stopSlotAnimation(slotID)
+    local animation = slotAnimations[slotID]
+    local sparkleFrame = ui.glyphFrame and ui.glyphFrame.sparkleFrame
+    if animation and animation.started and sparkleFrame and sparkleFrame.EndAnimation then
+        sparkleFrame:EndAnimation(slotID)
+        animation.started = nil
+    end
+end
+
+local function startSlotAnimation(slotID, duration, size)
+    local animation = slotAnimations[slotID]
+    local sparkleFrame = ui.glyphFrame and ui.glyphFrame.sparkleFrame
+    if not animation or not sparkleFrame or not sparkleFrame.StartAnimation then
+        return
+    end
+    local template = "SparkleTextureNormal"
+    if size == 1 then
+        template = "SparkleTextureSmall"
+    elseif size == 2 then
+        template = "SparkleTextureKindaSmall"
+    end
+    local sparkle = sparkleFrame:StartAnimation(
+        slotID, "LinearTranslate", template, false,
+        animation.point, animation.xStart, animation.xStop,
+        animation.yStart, animation.yStop, duration
+    )
+    if sparkle and sparkle.SetOnFinished then
+        sparkle:SetOnFinished(function(s)
+            if s.name and slotAnimations[s.name] then
+                slotAnimations[s.name].started = false
+            end
+        end)
+    end
+    animation.started = true
+end
+
+local function pulseGlyphGlow()
+    local frame = ui.glyphFrame
+    if not frame or not frame.glow then
+        return
+    end
+    frame.pulseElapsed = 0
+    frame.glow:Show()
+end
+
+local function updateGlyphSlot(self)
+    local id = self:GetID()
+    local enabled, glyphType, glyphSpell, iconFilename = GetGlyphSocketInfo(id)
+    if glyphType == GLYPHTYPE_MINOR then
+        setGlyphType(self, GLYPHTYPE_MINOR)
+    else
+        setGlyphType(self, GLYPHTYPE_MAJOR)
+    end
+    self.elapsed = 0
+    self.tintElapsed = 0
+    if not enabled then
+        slotAnimations[id].glyph = nil
+        self.shine:Hide()
+        self.background:Hide()
+        self.glyph:Hide()
+        self.ring:Hide()
+        self.setting:SetTexture("Interface\\Spellbook\\UI-GlyphFrame-Locked")
+        self.setting:SetTexCoord(0.1, 0.9, 0.1, 0.9)
+        sizeTex(self.setting, self.glyphType == GLYPHTYPE_MAJOR and 108 or 86, self.glyphType == GLYPHTYPE_MAJOR and 108 or 86)
+    elseif not glyphSpell then
+        slotAnimations[id].glyph = nil
+        self.spell = nil
+        self.shine:Show()
+        self.background:Show()
+        self.background:SetTexCoord(GLYPH_SLOTS[0].left, GLYPH_SLOTS[0].right, GLYPH_SLOTS[0].top, GLYPH_SLOTS[0].bottom)
+        if not (GlyphMatchesSocket and GlyphMatchesSocket(id)) then
+            self.background:SetAlpha(1)
+        end
+        self.glyph:Hide()
+        self.ring:Show()
+    else
+        slotAnimations[id].glyph = true
+        self.spell = glyphSpell
+        self.shine:Show()
+        self.background:Show()
+        self.background:SetAlpha(1)
+        self.background:SetTexCoord(GLYPH_SLOTS[id].left, GLYPH_SLOTS[id].right, GLYPH_SLOTS[id].top, GLYPH_SLOTS[id].bottom)
+        self.glyph:Show()
+        if iconFilename then
+            self.glyph:SetTexture(iconFilename)
+        else
+            self.glyph:SetTexture("Interface\\Spellbook\\UI-Glyph-Rune1")
+        end
+        sizeTex(self.glyph, 53, 53)
+        self.ring:Show()
+    end
+end
+
+local function updateGlyphFrame()
+    for i = 1, NUM_GLYPH_SLOTS do
+        local socket = ui.glyphSockets[i]
+        if socket then
+            updateGlyphSlot(socket)
+        end
+    end
+end
+
+local function createGlyphSocket(parent, id, point, x, y)
+    local btn = CreateFrame("Button", "ClasslessUIGlyph" .. id, parent)
+    btn:SetWidth(90)
+    btn:SetHeight(90)
+    btn:SetID(id)
+    btn:SetPoint(point, parent, point, x, y)
+    btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+
+    local setting = btn:CreateTexture(nil, "BACKGROUND")
+    setting:SetPoint("CENTER", 0, 0)
+    setting:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    sizeTex(setting, 86, 86)
+    setting:SetTexCoord(0.765625, 0.927734375, 0.15625, 0.31640625)
+    btn.setting = setting
+
+    local highlight = btn:CreateTexture(nil, "BORDER")
+    highlight:SetPoint("CENTER", 0, 0)
+    highlight:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    highlight:SetBlendMode("ADD")
+    highlight:SetVertexColor(1, 1, 1, 0.25)
+    sizeTex(highlight, 86, 86)
+    highlight:SetTexCoord(0.765625, 0.927734375, 0.15625, 0.31640625)
+    highlight:Hide()
+    btn.highlight = highlight
+
+    local background = btn:CreateTexture(nil, "BORDER")
+    background:SetPoint("CENTER", 0, 0)
+    background:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    sizeTex(background, 64, 64)
+    background:SetTexCoord(0.78125, 0.91015625, 0.69921875, 0.828125)
+    btn.background = background
+
+    local glyph = btn:CreateTexture(nil, "ARTWORK")
+    glyph:SetPoint("CENTER", 0, 0)
+    glyph:SetTexture("Interface\\Spellbook\\UI-Glyph-Rune1")
+    sizeTex(glyph, 53, 53)
+    btn.glyph = glyph
+
+    local ring = btn:CreateTexture(nil, "OVERLAY")
+    ring:SetPoint("CENTER", 0, 1)
+    ring:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    sizeTex(ring, 62, 62)
+    ring:SetTexCoord(0.787109375, 0.908203125, 0.033203125, 0.154296875)
+    btn.ring = ring
+
+    local shine = btn:CreateTexture(nil, "OVERLAY")
+    shine:SetPoint("CENTER", -9, 12)
+    shine:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    sizeTex(shine, 16, 16)
+    shine:SetTexCoord(0.9609375, 1, 0.921875, 0.9609375)
+    btn.shine = shine
+
+    btn.elapsed = 0
+    btn.tintElapsed = 0
+    btn.glyphType = nil
+
+    btn:SetScript("OnShow", function(self)
+        updateGlyphSlot(self)
+    end)
+    btn:SetScript("OnClick", function(self, button)
+        local slot = self:GetID()
+        if IsModifiedClick and IsModifiedClick("CHATLINK") and ChatFrameEditBox and ChatFrameEditBox:IsVisible() then
+            local link = GetGlyphLink and GetGlyphLink(slot)
+            if link and ChatEdit_InsertLink then
+                ChatEdit_InsertLink(link)
+            end
+        elseif button == "RightButton" then
+            if IsShiftKeyDown() then
+                local _, _, glyphSpell = GetGlyphSocketInfo(slot)
+                if glyphSpell then
+                    local glyphName = GetSpellInfo(glyphSpell)
+                    local dialog = StaticPopup_Show("CONFIRM_REMOVE_GLYPH", glyphName)
+                    if dialog then
+                        dialog.data = slot
+                    end
+                end
+            end
+        elseif self.glyph:IsShown() and GlyphMatchesSocket and GlyphMatchesSocket(slot) then
+            local dialog = StaticPopup_Show("CONFIRM_GLYPH_PLACEMENT", slot)
+            if dialog then
+                dialog.data = slot
+            end
+        elseif PlaceGlyphInSocket then
+            PlaceGlyphInSocket(slot)
+        end
+    end)
+    btn:SetScript("OnEnter", function(self)
+        self.hasCursor = true
+        if self.background:IsShown() then
+            self.highlight:Show()
+        end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetGlyph(self:GetID())
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function(self)
+        self.hasCursor = nil
+        self.highlight:Hide()
+        GameTooltip:Hide()
+    end)
+    btn:SetScript("OnUpdate", function(self, elapsed)
+        local GLYPHFRAMEGLYPH_FINISHED = 6
+        local GLYPHFRAMEGLYPH_START = 2
+        local GLYPHFRAMEGLYPH_HOLD = 4
+        local hasGlyph = self.glyph:IsShown()
+        if hasGlyph or self.elapsed > 0 then
+            self.elapsed = self.elapsed + elapsed
+            local e = self.elapsed
+            if e >= GLYPHFRAMEGLYPH_FINISHED then
+                self.setting:SetAlpha(0.6)
+                self.elapsed = 0
+            elseif e <= GLYPHFRAMEGLYPH_START then
+                self.setting:SetAlpha(0.6 + (0.4 * e / GLYPHFRAMEGLYPH_START))
+            elseif e >= GLYPHFRAMEGLYPH_HOLD then
+                self.setting:SetAlpha(1 - (0.4 * (e - GLYPHFRAMEGLYPH_HOLD) / (GLYPHFRAMEGLYPH_FINISHED - GLYPHFRAMEGLYPH_HOLD)))
+            end
+        else
+            self.setting:SetAlpha(0.6)
+        end
+
+        local TINT_START, TINT_HOLD, TINT_FINISHED = 0.6, 0.8, 1.6
+        local slot = self:GetID()
+        if not hasGlyph and self.background:IsShown() and GlyphMatchesSocket and GlyphMatchesSocket(slot) then
+            self.tintElapsed = self.tintElapsed + elapsed
+            self.background:SetTexCoord(GLYPH_SLOTS[slot].left, GLYPH_SLOTS[slot].right, GLYPH_SLOTS[slot].top, GLYPH_SLOTS[slot].bottom)
+            local showHighlight = false
+            if not MouseIsOver(self) then
+                self.highlight:Show()
+                showHighlight = true
+            end
+            local alpha
+            local e = self.tintElapsed
+            if e >= TINT_FINISHED then
+                alpha = 1
+                self.tintElapsed = 0
+            elseif e <= TINT_START then
+                alpha = 1 - (0.6 * e / TINT_START)
+            elseif e >= TINT_HOLD then
+                alpha = 0.4 + (0.6 * (e - TINT_HOLD) / (TINT_FINISHED - TINT_HOLD))
+            end
+            if alpha then
+                self.background:SetAlpha(alpha)
+                if showHighlight then
+                    self.highlight:SetAlpha(HIGHLIGHT_BASEALPHA * alpha)
+                else
+                    self.highlight:SetAlpha(HIGHLIGHT_BASEALPHA)
+                end
+            end
+        elseif not hasGlyph then
+            self.background:SetTexCoord(GLYPH_SLOTS[0].left, GLYPH_SLOTS[0].right, GLYPH_SLOTS[0].top, GLYPH_SLOTS[0].bottom)
+            self.background:SetAlpha(1)
+        end
+
+        if self.hasCursor and SpellIsTargeting and SpellIsTargeting() then
+            if GlyphMatchesSocket and GlyphMatchesSocket(self:GetID()) and self.background:IsShown() then
+                SetCursor("CAST_CURSOR")
+            else
+                SetCursor("CAST_ERROR_CURSOR")
+            end
+        end
+    end)
+    return btn
+end
+
+local function ensureGlyphFrame()
+    if ui.glyphFrame then
+        return ui.glyphFrame
+    end
+    local parent = ui.body
+    local frame = CreateFrame("Frame", "ClasslessUIGlyphFrame", parent)
+    frame:SetWidth(384)
+    frame:SetHeight(512)
+    frame:SetPoint("CENTER", parent, "CENTER", 0, 0)
+    frame:EnableMouse(true)
+    if frame.SetHitRectInsets then
+        frame:SetHitRectInsets(0, 30, 0, 70)
+    end
+    frame:Hide()
+
+    local bookIcon = frame:CreateTexture(nil, "BACKGROUND")
+    bookIcon:SetTexture("Interface\\Spellbook\\Spellbook-Icon")
+    sizeTex(bookIcon, 58, 58)
+    bookIcon:SetPoint("TOPLEFT", 10, -8)
+
+    local bg = frame:CreateTexture(nil, "ARTWORK")
+    bg:SetTexture("Interface\\Spellbook\\UI-GlyphFrame")
+    sizeTex(bg, 352, 441)
+    bg:SetPoint("TOPLEFT")
+    bg:SetTexCoord(0, 0.6875, 0, 0.861328125)
+    frame.bg = bg
+
+    local title = frame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    title:SetPoint("CENTER", 6, 230)
+    title:SetText((type(GLYPHS) == "string" and GLYPHS) or "Glyphs")
+    frame.title = title
+
+    local glow = frame:CreateTexture(nil, "OVERLAY")
+    glow:SetTexture("Interface\\Spellbook\\UI-GlyphFrame-Glow")
+    sizeTex(glow, 352, 441)
+    glow:SetPoint("TOPLEFT", -9, -38)
+    glow:SetTexCoord(0, 0.6875, 0, 0.861328125)
+    glow:Hide()
+    glow:SetAlpha(0)
+    frame.glow = glow
+
+    if SparkleFrame and SparkleFrame.New then
+        frame.sparkleFrame = SparkleFrame:New(frame)
+    end
+
+    for _, layout in ipairs(GLYPH_SOCKET_LAYOUT) do
+        ui.glyphSockets[layout.id] = createGlyphSocket(frame, layout.id, layout.point, layout.x, layout.y)
+    end
+
+    frame:SetScript("OnShow", function()
+        updateGlyphFrame()
+    end)
+    frame:SetScript("OnEnter", function()
+        if SpellIsTargeting and SpellIsTargeting() then
+            SetCursor("CAST_ERROR_CURSOR")
+        end
+    end)
+    frame:SetScript("OnUpdate", function(self, elapsed)
+        if self.pulseElapsed then
+            self.pulseElapsed = self.pulseElapsed + elapsed
+            local pulseElapsed = self.pulseElapsed
+            if pulseElapsed >= GLYPHFRAME_FINISHED then
+                self.glow:Hide()
+                self.glow:SetAlpha(0)
+                self.pulseElapsed = nil
+            elseif pulseElapsed <= GLYPHFRAME_PULSEIN then
+                self.glow:SetAlpha(pulseElapsed / GLYPHFRAME_PULSEIN)
+            elseif pulseElapsed >= GLYPHFRAME_PULSEOUT then
+                self.glow:SetAlpha(1 - ((pulseElapsed - GLYPHFRAME_PULSEOUT) / (GLYPHFRAME_FINISHED - GLYPHFRAME_PULSEOUT)))
+            end
+        end
+        for i = 1, NUM_GLYPH_SLOTS do
+            if not slotAnimations[i].started and slotAnimations[i].glyph then
+                local sparkleSize = math.random(3)
+                local mods = { 1.25, 1.5, 1.8 }
+                startSlotAnimation(i, sparkleSize * mods[sparkleSize], sparkleSize)
+            end
+        end
+    end)
+    frame:RegisterEvent("GLYPH_ADDED")
+    frame:RegisterEvent("GLYPH_REMOVED")
+    frame:RegisterEvent("GLYPH_UPDATED")
+    frame:RegisterEvent("PLAYER_LEVEL_UP")
+    frame:SetScript("OnEvent", function(self, event, ...)
+        if event == "PLAYER_LEVEL_UP" then
+            updateGlyphFrame()
+            return
+        end
+        local index = ...
+        local glyph = ui.glyphSockets[index]
+        if not glyph then
+            updateGlyphFrame()
+            return
+        end
+        updateGlyphSlot(glyph)
+        local glyphType = glyph.glyphType
+        if event == "GLYPH_ADDED" or event == "GLYPH_UPDATED" then
+            pulseGlyphGlow()
+            if glyphType == GLYPHTYPE_MINOR then
+                PlaySound("Glyph_MinorCreate")
+            elseif glyphType == GLYPHTYPE_MAJOR then
+                PlaySound("Glyph_MajorCreate")
+            end
+        elseif event == "GLYPH_REMOVED" then
+            stopSlotAnimation(index)
+            if glyphType == GLYPHTYPE_MINOR then
+                PlaySound("Glyph_MinorDestroy")
+            elseif glyphType == GLYPHTYPE_MAJOR then
+                PlaySound("Glyph_MajorDestroy")
+            end
+        end
+        if glyph.hasCursor then
+            GameTooltip:SetOwner(glyph, "ANCHOR_RIGHT")
+            GameTooltip:SetGlyph(glyph:GetID())
+            GameTooltip:Show()
+        end
+    end)
+
+    ui.glyphFrame = frame
+    return frame
+end
+
 function refreshPanes()
     if not ui.spellPane then
         return
@@ -1090,6 +1551,26 @@ function refreshPanes()
         ui.talentPane.PointsOverlay:Show()
     end
     ui.spellPane.Points:SetText("")
+
+    if ui.selectedExtra == "glyph" then
+        ui.spellPane:Hide()
+        ui.talentPane:Hide()
+        if ui.talentPane.PointsOverlay then
+            ui.talentPane.PointsOverlay:Hide()
+        end
+        hidePool(ui.spellButtons, 1)
+        hidePool(ui.rightSpellButtons, 1)
+        hidePool(ui.talentButtons, 1)
+        ensureGlyphFrame()
+        ui.glyphFrame:Show()
+        updateGlyphFrame()
+        return
+    end
+
+    if ui.glyphFrame then
+        ui.glyphFrame:Hide()
+    end
+    ui.spellPane:Show()
 
     if ui.selectedGeneral and not ui.selectedExtra then
         ui.spellPane:ClearAllPoints()
@@ -1126,15 +1607,6 @@ function refreshPanes()
     ui.talentPane:SetPoint("LEFT", ui.talentPane:GetParent(), "CENTER", 0, 0)
     ui.talentPane:Show()
 
-    if ui.selectedExtra == "glyph" then
-        ui.spellPane.Title:SetText(className .. " glyphs")
-        ui.talentPane.Title:SetText("Glyph slots")
-        setPaneTalentArt(ui.talentPane, nil)
-        renderSpellbook({})
-        hidePool(ui.rightSpellButtons, 1)
-        hidePool(ui.talentButtons, 1)
-        return
-    end
     if ui.selectedExtra == "pet" then
         ui.spellPane.Title:SetText("Pet abilities")
         ui.talentPane.Title:SetText("Pet talents")

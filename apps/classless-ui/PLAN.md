@@ -12,6 +12,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | 2–5 | `CatalogData.lua` from Talent.sql + SkillLineAbility (2604 spells, 1014 talent nodes); spellbook families with rank arrows; talent grid; LearnSpell / LearnTalent / UnlearnTalent; RequestState sends real `HasSpell` | Prereq branch textures, glyph pane, pet spells, pickup edge cases, strip XML from MPQ, N-key hook |
 | 2026-09-19 | debug | AIO errors go to chat, Blizzard script-error UI (`scriptErrors`), `AIO_ERRORS` in WTF SavedVariables, and worldserver `[AIO client][Name]`. Obfuscation off. Ignore `TalentsAndSpellbook.xml` FontString warning. | Restore `AIO_CODE_OBFUSCATE` before a real patch |
 | 2026-09-19 | catalog | Spellbook is **class trainer_spell** (Type=0), not raw SkillLineAbility. SLA only assigns a trained spell to a spec. `class_trainer_spells.txt` is a dump from acore_world. | Glyph pane; talent-node denylist if a talent should be hidden |
+| 2026-09-19 | glyph | Glyph tab is a Lua port of `Blizzard_GlyphUI.xml`: 384×512 `UI-GlyphFrame`, 3 major + 3 minor sockets, `GetGlyphSocketInfo` / `PlaceGlyphInSocket`. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 
 ## Why a new system
 
@@ -86,7 +87,7 @@ Catalog grid, not `GetTalentInfo`. Click learns next rank. Right-click unlearns 
 
 ## Glyph pane
 
-3 major + 3 minor slots, glyph list for the selected class. Socketing still uses the item.
+Lua recreation of stock `Blizzard_GlyphUI.xml` (not a glyph-item list). Native 384×512 frame centered in the body: `UI-GlyphFrame` 352×441, `GLYPHS` title, six sockets at the XML offsets (ids 1/2 major center, 3/5 major-minor top, 4/6 bottom). Socketing still uses the glyph item + `PlaceGlyphInSocket` / shift-right-click `RemoveGlyphFromSocket`.
 
 ## Pet pane
 
@@ -140,5 +141,5 @@ Server Lua is the default (`LearnSpell`, `RemoveSpell`, `HasSpell`, `SetFreeTale
 
 - `/classless` and `.classless` open the frame; drag and close work.
 - Class click retargets spec 1–3 + General labels/icons.
-- Glyph and Pet tabs are visible and selectable (panes still placeholders).
+- Glyph tab shows the stock 6-socket UI; Pet tab is selectable.
 - Teleporter / transmog AIO still load.
