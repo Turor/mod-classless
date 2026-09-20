@@ -812,10 +812,16 @@ local function createTalentButton(index)
             end
             return
         end
-        if maxRank < 1 or current >= maxRank then
-            local id = self.node.r[current]
+        if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
+            local id = self.node.r[math.max(current, 1)]
             if id and isKnown(id) then
                 pickupSpellId(id)
+            end
+            return
+        end
+        if maxRank < 1 or current >= maxRank then
+            if current > 0 then
+                AIO.Handle("ClasslessUIServer", "UnlearnTalent", self.node.id, current)
             end
             return
         end
