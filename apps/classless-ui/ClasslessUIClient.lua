@@ -799,20 +799,21 @@ local function createTalentButton(index)
             return
         end
         local current = talentRank(self.node)
+        local maxRank = self.node.r and #self.node.r or 0
         if mouse == "RightButton" then
             if current > 0 then
                 AIO.Handle("ClasslessUIServer", "UnlearnTalent", self.node.id, current)
             end
             return
         end
-        if current < #self.node.r then
-            AIO.Handle("ClasslessUIServer", "LearnTalent", self.node.id, current + 1)
-        else
+        if maxRank < 1 or current >= maxRank then
             local id = self.node.r[current]
             if id and isKnown(id) then
                 pickupSpellId(id)
             end
+            return
         end
+        AIO.Handle("ClasslessUIServer", "LearnTalent", self.node.id, current + 1)
     end)
     btn:SetScript("OnDragStart", function(self)
         if not self.node then

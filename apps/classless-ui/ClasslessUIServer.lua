@@ -395,6 +395,10 @@ function Handlers.LearnTalent(player, talentId, rank)
         return
     end
     rank = math.floor(rank)
+    local maxRank = #node.r
+    if rank < 1 or rank > maxRank then
+        return
+    end
     local spellId = node.r[rank]
     if not spellId then
         return
@@ -407,6 +411,10 @@ function Handlers.LearnTalent(player, talentId, rank)
         end
         local hasFn = function(id)
             return unitHasSpell(pet, id)
+        end
+        if hasFn(spellId) or hasFn(node.r[maxRank]) then
+            sendState(player)
+            return
         end
         local points = 0
         if pet.GetFreeTalentPoints then
@@ -442,6 +450,10 @@ function Handlers.LearnTalent(player, talentId, rank)
     end
     local hasFn = function(id)
         return player:HasSpell(id)
+    end
+    if hasFn(spellId) or hasFn(node.r[maxRank]) then
+        sendState(player)
+        return
     end
     local ok, err = talentPrereqsOk(hasFn, node, rank)
     if not ok then
