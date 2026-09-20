@@ -1143,6 +1143,13 @@ local function createTalentButton(index)
             end
             return
         end
+        if ui.selectedExtra == "pet" then
+            if maxRank < 1 or current >= maxRank then
+                return
+            end
+            AIO.Handle("ClasslessUIServer", "LearnTalent", self.node.id, current + 1)
+            return
+        end
         if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
             local id = self.node.r[math.max(current, 1)]
             if id and isKnown(id) then
@@ -1160,6 +1167,9 @@ local function createTalentButton(index)
         AIO.Handle("ClasslessUIServer", "LearnTalent", self.node.id, current + 1)
     end)
     btn:SetScript("OnDragStart", function(self)
+        if ui.selectedExtra == "pet" then
+            return
+        end
         if not self.node then
             return
         end
@@ -2227,9 +2237,27 @@ function refreshPanes()
         setPaneTalentArt(ui.talentPane, tabs[1])
         hidePool(ui.rightSpellButtons, 1)
         local petIds = {}
-        for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
-            if isKnown(id) then
+        local seen = {}
+        local function addPetSpell(id)
+            if id and isKnown(id) and not seen[id] then
+                seen[id] = true
                 petIds[#petIds + 1] = id
+            end
+        end
+        for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
+            addPetSpell(id)
+        end
+        for _, tabId in ipairs(tabs) do
+            local nodes = Catalog and Catalog.talents and Catalog.talents[tabId]
+            if nodes then
+                for i = 1, #nodes do
+                    local ranks = nodes[i] and nodes[i].r
+                    if ranks then
+                        for r = 1, #ranks do
+                            addPetSpell(ranks[r])
+                        end
+                    end
+                end
             end
         end
         renderSpellbook(petIds, ui.spellPane, ui.spellButtons)

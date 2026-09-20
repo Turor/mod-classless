@@ -763,13 +763,24 @@ function Handlers.LearnTalent(player, talentId, rank)
             sendState(player)
             return
         end
+        local usedBefore = 0
+        if pet.GetUsedTalentCount then
+            usedBefore = tonumber(pet:GetUsedTalentCount()) or 0
+        end
         if player.LearnPetTalent then
             player:LearnPetTalent(pet:GetGUID(), talentId, rank - 1)
         end
         if not unitHasSpell(pet, spellId) and pet.LearnSpell then
             pet:LearnSpell(spellId)
-            pet:SetFreeTalentPoints(points - 1)
         end
+        local usedAfter = usedBefore
+        if pet.GetUsedTalentCount then
+            usedAfter = tonumber(pet:GetUsedTalentCount()) or 0
+        end
+        if usedAfter <= usedBefore and pet.SetUsedTalentCount then
+            pet:SetUsedTalentCount(usedBefore + 1)
+        end
+        petFreeTalentPoints(player, pet)
         sendState(player)
         return
     end
@@ -835,11 +846,23 @@ function Handlers.UnlearnTalent(player, talentId, rank)
             return
         end
         local spellId = node.r[current]
+        local usedBefore = 0
+        if pet.GetUsedTalentCount then
+            usedBefore = tonumber(pet:GetUsedTalentCount()) or 0
+        end
         if pet.UnlearnSpell then
             pet:UnlearnSpell(spellId, current > 1, true)
         elseif pet.RemoveSpell then
             pet:RemoveSpell(spellId, current > 1, true)
         end
+        local usedAfter = usedBefore
+        if pet.GetUsedTalentCount then
+            usedAfter = tonumber(pet:GetUsedTalentCount()) or 0
+        end
+        if usedAfter >= usedBefore and usedBefore > 0 and pet.SetUsedTalentCount then
+            pet:SetUsedTalentCount(usedBefore - 1)
+        end
+        petFreeTalentPoints(player, pet)
         sendState(player)
         return
     end
