@@ -15,6 +15,7 @@ Replace the unfinished XML addon (`ClasslessUIAddons/TalentsAndSpellbook.xml`) w
 | 2026-09-19 | glyph | Glyph tab is a Lua port of `Blizzard_GlyphUI.xml`: 384×512 `UI-GlyphFrame`, 3 major + 3 minor sockets, `GetGlyphSocketInfo` / `PlaceGlyphInSocket`. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 | 2026-09-19 | unlearn | Maxed talent ranks can be unlearned. `LearnSpell(previous)` was re-teaching the dropped rank via next-in-chain; UnlearnTalent peels the highest known rank and recasts the previous. Right-click unlearns; left-click on a maxed node pickups. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 | 2026-09-19 | unlearn-cpp | `Classless_DropTalentRank` fully marks dropped ranks `PLAYERSPELL_REMOVED` (Lua `RemoveSpell` cannot). `Player:DropTalentRank` peels 5→4→3→… without re-teaching the chain. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
+| 2026-09-19 | talent-sync | Classless UI learned ranks include stock `HasTalent` (m_talents), not only `HasSpell`. Client refreshes on `PLAYER_TALENT_UPDATE` / `CHARACTER_POINTS_CHANGED`. DropTalentRank also `_removeTalent` / `addTalent` so both maps stay aligned. | Talent prereq branch textures, strip XML from MPQ, N-key hook |
 
 ## Why a new system
 

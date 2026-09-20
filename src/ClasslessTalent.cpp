@@ -100,7 +100,10 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
     if (!sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false))
         return false;
 
+    uint8 specMask = player->GetActiveSpecMask();
     ErasePlayerSpell(player, dropSpellId);
+    player->_removeTalent(dropSpellId, specMask);
+    player->_removeTalentAurasAndSpells(dropSpellId);
 
     uint32 nextId = sSpellMgr->GetNextSpellInChain(dropSpellId);
     while (nextId && nextId != keepSpellId)
@@ -108,11 +111,19 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
         if (!GetTalentSpellPos(nextId))
             break;
         ErasePlayerSpell(player, nextId);
+        player->_removeTalent(nextId, specMask);
+        player->_removeTalentAurasAndSpells(nextId);
         nextId = sSpellMgr->GetNextSpellInChain(nextId);
     }
 
     if (keepSpellId)
+    {
         ActivatePlayerSpell(player, keepSpellId);
+        if (GetTalentSpellPos(keepSpellId))
+            player->addTalent(keepSpellId, specMask, 0);
+    }
 
-    return !player->HasSpell(dropSpellId);
+    player->SendTalentsInfoData(false);
+
+    return !player->HasSpell(dropSpellId) && !player->HasTalent(dropSpellId, player->GetActiveSpec());
 }

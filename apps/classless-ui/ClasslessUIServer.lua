@@ -171,6 +171,25 @@ local function unitHasSpell(unit, spellId)
     return unit and unit.HasSpell and unit:HasSpell(spellId)
 end
 
+-- Stock LearnTalent writes m_talents (HasTalent). Classless LearnSpell writes
+-- m_spells (HasSpell). The UI has to treat either as a known talent rank.
+local function playerHasTalentRank(player, spellId)
+    if not player or not spellId then
+        return false
+    end
+    if player:HasSpell(spellId) then
+        return true
+    end
+    if not player.HasTalent then
+        return false
+    end
+    local spec = 0
+    if player.GetActiveSpec then
+        spec = player:GetActiveSpec() or 0
+    end
+    return player:HasTalent(spellId, spec) and true or false
+end
+
 local function highestKnownTalentRank(hasFn, node)
     local rank = 0
     for i = 1, #node.r do
@@ -197,7 +216,7 @@ local function collectLearned(player)
             if not isPetTabId(node.tabId) then
                 for i = 1, #node.r do
                     local spellId = node.r[i]
-                    if player:HasSpell(spellId) then
+                    if playerHasTalentRank(player, spellId) then
                         learned[spellId] = true
                     end
                 end
@@ -248,7 +267,7 @@ end
 
 local function treePoints(player, tabId)
     return treePointsOn(function(id)
-        return player:HasSpell(id)
+        return playerHasTalentRank(player, id)
     end, tabId)
 end
 
@@ -461,7 +480,7 @@ function Handlers.LearnTalent(player, talentId, rank)
         return
     end
     local hasFn = function(id)
-        return player:HasSpell(id)
+        return playerHasTalentRank(player, id)
     end
     if hasFn(spellId) or hasFn(node.r[maxRank]) then
         sendState(player)
@@ -472,7 +491,7 @@ function Handlers.LearnTalent(player, talentId, rank)
         player:SendBroadcastMessage(err)
         return
     end
-    if player:HasSpell(spellId) then
+    if playerHasTalentRank(player, spellId) then
         sendState(player)
         return
     end
@@ -513,7 +532,7 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         return
     end
     local hasFn = function(id)
-        return player:HasSpell(id)
+        return playerHasTalentRank(player, id)
     end
     local current = highestKnownTalentRank(hasFn, node)
     if current < 1 then

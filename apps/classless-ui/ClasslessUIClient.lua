@@ -1895,6 +1895,8 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("SPELLS_CHANGED")
 events:RegisterEvent("UNIT_PET")
+events:RegisterEvent("PLAYER_TALENT_UPDATE")
+events:RegisterEvent("CHARACTER_POINTS_CHANGED")
 local lastStateReq = 0
 events:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_PET" and unit ~= "player" then
