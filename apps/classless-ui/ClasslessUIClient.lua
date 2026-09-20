@@ -386,9 +386,13 @@ local function reqLevel(spellId)
 end
 
 local function talentRank(node)
+    local learned = ui.state.learned
+    if ui.selectedExtra == "pet" then
+        learned = ui.state.petLearned
+    end
     local rank = 0
     for i, spellId in ipairs(node.r) do
-        if isKnown(spellId) then
+        if learned and (learned[spellId] or learned[tostring(spellId)]) then
             rank = i
         end
     end
@@ -491,16 +495,21 @@ local function spellBookSlotForId(spellId)
     local book = bookTypeSpell()
     local wantName, wantRank = GetSpellInfo(spellId)
     local function slotMatches(slot)
-        local link = GetSpellLink and GetSpellLink(slot, book)
-        if link then
-            local id = tonumber(string.match(link, "spell:(%d+)"))
-            if id == spellId then
-                return true
+        if not slot or slot < 1 then
+            return false
+        end
+        if GetSpellLink then
+            local ok, link = pcall(GetSpellLink, slot, book)
+            if ok and link then
+                local id = tonumber(string.match(link, "spell:(%d+)"))
+                if id == spellId then
+                    return true
+                end
             end
         end
         if wantName and GetSpellName then
-            local n, r = GetSpellName(slot, book)
-            if n == wantName and (not wantRank or wantRank == "" or r == wantRank) then
+            local ok, n, r = pcall(GetSpellName, slot, book)
+            if ok and n == wantName and (not wantRank or wantRank == "" or r == wantRank) then
                 return true
             end
         end
@@ -518,12 +527,6 @@ local function spellBookSlotForId(spellId)
                     return slot
                 end
             end
-        end
-    end
-    local maxSlots = MAX_SPELLS or 1024
-    for slot = 1, maxSlots do
-        if slotMatches(slot) then
-            return slot
         end
     end
     return nil
