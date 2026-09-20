@@ -1158,8 +1158,9 @@ function refreshPanes()
 
     local ids, spec = specSpellIds()
     local specName = spec and spec.name or "?"
-    ui.spellPane.Title:SetText(specName .. " spells")
-    ui.talentPane.Title:SetText(specName .. " talents")
+    local classBit = className ~= "?" and (" " .. className) or ""
+    ui.spellPane.Title:SetText(specName .. classBit .. " spells")
+    ui.talentPane.Title:SetText(specName .. classBit .. " talents")
     setPaneTalentArt(ui.talentPane, spec and spec.tabId)
     hidePool(ui.rightSpellButtons, 1)
     renderSpellbook(ids, ui.spellPane, ui.spellButtons)
@@ -1290,7 +1291,7 @@ local function buildFrame()
                 bannerW,
                 NAV_ROW_H,
                 cr, cg, cb,
-                spec and spec.name or tostring(i)
+                spec and (spec.name .. (info and (" " .. info.name) or "")) or tostring(i)
             )
             btn:SetPoint("TOPLEFT", 0, -((i - 1) * (NAV_ROW_H + NAV_SPEC_GAP)))
             local capturedClass, capturedSpec = classId, i
