@@ -304,28 +304,35 @@ local function forEachTalentNode(pet, fn)
     end
 end
 
-local function allPointsOn(hasFn, pet)
+local function nodeSpend(player, hasFn, n, pet)
+    if not pet and player and player.GetClasslessTalentRank then
+        return tonumber(player:GetClasslessTalentRank(n.id)) or 0
+    end
+    return highestKnownTalentRank(hasFn, n)
+end
+
+local function allPointsOn(hasFn, pet, player)
     local spent = 0
-    forEachTalentNode(pet, function(node)
-        spent = spent + highestKnownTalentRank(hasFn, node)
+    forEachTalentNode(pet, function(n)
+        spent = spent + nodeSpend(player, hasFn, n, pet)
     end)
     return spent
 end
 
-local function unlearnWouldOrphan(hasFn, node, pet)
-    local current = highestKnownTalentRank(hasFn, node)
+local function unlearnWouldOrphan(player, hasFn, node, pet)
+    local current = nodeSpend(player, hasFn, node, pet)
     if current < 1 then
         return true, UNLEARN_BLOCKED_MSG
     end
     -- Row gate only. Points already sitting in later rows keep those rows
     -- legal, so a filled tier 2 can let you strip tier 1.
-    local spentAfter = allPointsOn(hasFn, pet) - 1
+    local spentAfter = allPointsOn(hasFn, pet, player) - 1
     local dangling = false
     forEachTalentNode(pet, function(n)
         if dangling then
             return
         end
-        local r = highestKnownTalentRank(hasFn, n)
+        local r = nodeSpend(player, hasFn, n, pet)
         if n.id == node.id then
             r = r - 1
         end
@@ -404,6 +411,56 @@ local function collectReqLevels(player)
     return req
 end
 
+local trainCosts
+local CHARGE_OK = 0
+local CHARGE_NO_GOLD = 1
+local CHARGE_NO_CURRENCY = 2
+
+local function loadTrainCosts(player)
+    if trainCosts then
+        return
+    end
+    trainCosts = {}
+    if not player or not player.GetClasslessSpellTrainCost or not Catalog or not Catalog.spellSet then
+        return
+    end
+    for spellId in pairs(Catalog.spellSet) do
+        local money, item, itemCount = player:GetClasslessSpellTrainCost(spellId)
+        money = tonumber(money) or 0
+        item = tonumber(item) or 0
+        itemCount = tonumber(itemCount) or 0
+        if money > 0 or (item > 0 and itemCount > 0) then
+            trainCosts[spellId] = {
+                money = money,
+                item = item,
+                itemCount = itemCount,
+            }
+        end
+    end
+end
+
+local function collectTrainCosts(player)
+    loadTrainCosts(player)
+    local costs = {}
+    local alt = {}
+    for spellId, c in pairs(trainCosts) do
+        if c.money and c.money > 0 then
+            costs[spellId] = c.money
+        end
+        if c.item and c.item > 0 and c.itemCount and c.itemCount > 0 then
+            alt[spellId] = { id = c.item, n = c.itemCount }
+        end
+    end
+    return costs, alt
+end
+
+local function learnFailed(player, msg)
+    if player.SendBroadcastMessage then
+        player:SendBroadcastMessage(msg)
+    end
+    AIO.Handle(player, "ClasslessUIClient", "LearnFailed", msg)
+end
+
 local function sendState(player)
     local points = 0
     if player.GetFreeTalentPoints then
@@ -414,10 +471,13 @@ local function sendState(player)
     if pet and pet.GetFreeTalentPoints then
         petPoints = pet:GetFreeTalentPoints() or 0
     end
+    local costs, altCosts = collectTrainCosts(player)
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
         learnable = collectLearnable(player),
         reqLevels = collectReqLevels(player),
+        costs = costs,
+        altCosts = altCosts,
         petLearned = collectPetLearned(pet),
         petOut = pet ~= nil,
         points = points,
@@ -439,6 +499,17 @@ function Handlers.LearnSpell(player, spellId)
     end
     if not canLearnSpell(player, spellId) then
         return
+    end
+    if player.ChargeClasslessSpellTrainCost then
+        local charged = tonumber(player:ChargeClasslessSpellTrainCost(spellId)) or CHARGE_OK
+        if charged == CHARGE_NO_GOLD then
+            learnFailed(player, "Not enough gold.")
+            return
+        end
+        if charged == CHARGE_NO_CURRENCY then
+            learnFailed(player, "Not enough currency.")
+            return
+        end
     end
     player:LearnSpell(spellId)
     sendState(player)
@@ -462,7 +533,7 @@ function Handlers.CastSpell(player, spellId)
     player:CastSpell(target, spellId, false)
 end
 
-local function talentPrereqsOk(hasFn, node, rank)
+local function talentPrereqsOk(player, hasFn, node, rank)
     if rank > 1 and not hasFn(node.r[rank - 1]) then
         return false, "Learn the previous talent rank first."
     end
@@ -475,7 +546,7 @@ local function talentPrereqsOk(hasFn, node, rank)
     end
     local row = node.t or 0
     local pet = isPetTabId(node.tabId)
-    if row > 0 and allPointsOn(hasFn, pet) < (row * 5) then
+    if row > 0 and allPointsOn(hasFn, pet, player) < (row * 5) then
         return false, "Not enough talent points invested."
     end
     return true
@@ -521,7 +592,7 @@ function Handlers.LearnTalent(player, talentId, rank)
             player:SendBroadcastMessage("No pet talent points remaining.")
             return
         end
-        local ok, err = talentPrereqsOk(hasFn, node, rank)
+        local ok, err = talentPrereqsOk(player, hasFn, node, rank)
         if not ok then
             player:SendBroadcastMessage(err)
             return
@@ -552,7 +623,7 @@ function Handlers.LearnTalent(player, talentId, rank)
         sendState(player)
         return
     end
-    local ok, err = talentPrereqsOk(hasFn, node, rank)
+    local ok, err = talentPrereqsOk(player, hasFn, node, rank)
     if not ok then
         player:SendBroadcastMessage(err)
         return
@@ -593,7 +664,7 @@ function Handlers.UnlearnTalent(player, talentId, rank)
         if current < 1 then
             return
         end
-        local orphaned, err = unlearnWouldOrphan(hasFn, node, true)
+        local orphaned, err = unlearnWouldOrphan(player, hasFn, node, true)
         if orphaned then
             player:SendBroadcastMessage(err)
             return
@@ -617,7 +688,7 @@ function Handlers.UnlearnTalent(player, talentId, rank)
     if current < 1 then
         return
     end
-    local orphaned, err = unlearnWouldOrphan(hasFn, node, false)
+    local orphaned, err = unlearnWouldOrphan(player, hasFn, node, false)
     if orphaned then
         player:SendBroadcastMessage(err)
         return

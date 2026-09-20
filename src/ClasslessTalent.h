@@ -11,3 +11,4 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
 
 // Highest known rank (1-based) from HasTalent or HasSpell on Talent.dbc RankID[].
 uint32 Classless_KnownTalentRank(Player* player, uint32 talentId);
+void Classless_ClearLearnedTalentSpells(Player* player);

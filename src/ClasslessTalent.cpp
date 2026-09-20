@@ -117,13 +117,18 @@ bool Classless_DropTalentRank(Player* player, uint32 dropSpellId, uint32 keepSpe
         nextId = sSpellMgr->GetNextSpellInChain(nextId);
     }
 
+    uint8 droppedRank = 0;
+    if (TalentSpellPos const* pos = GetTalentSpellPos(dropSpellId))
+        droppedRank = pos->rank + 1;
+
     if (keepSpellId)
     {
         ActivatePlayerSpell(player, keepSpellId);
         if (GetTalentSpellPos(keepSpellId))
-            player->addTalent(keepSpellId, specMask, 0);
+            player->addTalent(keepSpellId, specMask, droppedRank);
     }
 
+    player->RecalculateUsedTalentCount();
     player->SendTalentsInfoData(false);
 
     return !player->HasSpell(dropSpellId) && !player->HasTalent(dropSpellId, player->GetActiveSpec());
@@ -138,14 +143,40 @@ uint32 Classless_KnownTalentRank(Player* player, uint32 talentId)
     if (!info)
         return 0;
 
-    uint32 rank = 0;
+    // Prefer the talent map (current rank only). HasSpell is true for every
+    // superceded rank in the chain and would over-count spend.
+    uint32 talentRank = 0;
+    uint32 spellRank = 0;
     for (uint8 i = 0; i < MAX_TALENT_RANK; ++i)
     {
         uint32 spellId = info->RankID[i];
         if (!spellId)
             continue;
-        if (player->HasTalent(spellId, player->GetActiveSpec()) || player->HasSpell(spellId))
-            rank = i + 1;
+        if (player->HasTalent(spellId, player->GetActiveSpec()))
+            talentRank = i + 1;
+        if (player->HasSpell(spellId))
+            spellRank = i + 1;
     }
-    return rank;
+    return talentRank > 0 ? talentRank : spellRank;
+}
+
+void Classless_ClearLearnedTalentSpells(Player* player)
+{
+    if (!player)
+        return;
+
+    for (uint32 i = 0; i < sTalentStore.GetNumRows(); ++i)
+    {
+        TalentEntry const* info = sTalentStore.LookupEntry(i);
+        if (!info)
+            continue;
+        TalentTabEntry const* tab = sTalentTabStore.LookupEntry(info->TalentTab);
+        if (!tab || tab->petTalentMask)
+            continue;
+        for (uint8 r = 0; r < MAX_TALENT_RANK; ++r)
+        {
+            if (info->RankID[r])
+                ErasePlayerSpell(player, info->RankID[r]);
+        }
+    }
 }

@@ -132,6 +132,15 @@ bool ClasslessPlayerScripts::OnPlayerLearnTalentUseAlternativeLogic(Player *play
     return false;
 }
 
+void ClasslessPlayerScripts::OnPlayerTalentsReset(Player* player, bool /*noCost*/)
+{
+    if (!sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false) || !player)
+        return;
+    // Trainer wipe only clears m_talents. Classless ranks also live in m_spells
+    // and would keep costing points / showing as known after the reset.
+    Classless_ClearLearnedTalentSpells(player);
+}
+
 void ClasslessPlayerScripts::OnPlayerCalculateTalentsPoints(Player const *player, uint32 &talentPointsForLevel) {
     if (sConfigMgr->GetOption<bool>("ClasslessModule.Enable", false)) {
         uint32 talentPoints = player->GetLevel();
