@@ -312,40 +312,25 @@ local function allPointsOn(hasFn, pet)
     return spent
 end
 
-local function talentRequirementsMet(hasFn, node, rankOf, spent)
-    local row = node.t or 0
-    if row > 0 and spent < (row * 5) then
-        return false
-    end
-    if node.p and node.p > 0 then
-        local dep = Catalog.talentById and Catalog.talentById[node.p]
-        local need = (node.pr or 0) + 1
-        if not dep or rankOf(dep) < need then
-            return false
-        end
-    end
-    return true
-end
-
 local function unlearnWouldOrphan(hasFn, node, pet)
     local current = highestKnownTalentRank(hasFn, node)
     if current < 1 then
         return true, UNLEARN_BLOCKED_MSG
     end
-    local function rankAfter(n)
-        local r = highestKnownTalentRank(hasFn, n)
-        if n.id == node.id then
-            r = r - 1
-        end
-        return r
-    end
+    -- Row gate only. Points already sitting in later rows keep those rows
+    -- legal, so a filled tier 2 can let you strip tier 1.
     local spentAfter = allPointsOn(hasFn, pet) - 1
     local dangling = false
     forEachTalentNode(pet, function(n)
         if dangling then
             return
         end
-        if rankAfter(n) > 0 and not talentRequirementsMet(hasFn, n, rankAfter, spentAfter) then
+        local r = highestKnownTalentRank(hasFn, n)
+        if n.id == node.id then
+            r = r - 1
+        end
+        local row = n.t or 0
+        if r > 0 and row > 0 and spentAfter < (row * 5) then
             dangling = true
         end
     end)

@@ -441,19 +441,18 @@ local function allTalentPointsSpent()
     return spent
 end
 
-local function talentRequirementsMet(node, rankOf, spent)
+local function talentRowMet(node, spent)
     local row = node.t or 0
-    if row > 0 and spent < (row * 5) then
-        return false
+    return row <= 0 or spent >= (row * 5)
+end
+
+local function talentChainMet(node, rankOf)
+    if not node.p or node.p <= 0 then
+        return true
     end
-    if node.p and node.p > 0 then
-        local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
-        local need = (node.pr or 0) + 1
-        if not dep or rankOf(dep) < need then
-            return false
-        end
-    end
-    return true
+    local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
+    local need = (node.pr or 0) + 1
+    return dep and rankOf(dep) >= need
 end
 
 local function talentIsLearnable(node)
@@ -471,28 +470,30 @@ local function talentIsLearnable(node)
     if points < 1 then
         return false
     end
-    return talentRequirementsMet(node, talentRank, allTalentPointsSpent())
+    if not talentRowMet(node, allTalentPointsSpent()) then
+        return false
+    end
+    return talentChainMet(node, talentRank)
 end
 
 local function canUnlearnTalent(node)
     if not node or talentRank(node) < 1 then
         return false, UNLEARN_BLOCKED_MSG
     end
+    -- Only the row gate: points already in later rows count. Arrow chains
+    -- do not pin lower-tier talents once those later ranks exist.
     local pet = ui.selectedExtra == "pet"
-    local function rankAfter(n)
-        local r = talentRank(n)
-        if n.id == node.id then
-            r = r - 1
-        end
-        return r
-    end
     local spentAfter = allTalentPointsSpent() - 1
     local dangling = false
     forEachTalentNode(pet, function(n)
         if dangling then
             return
         end
-        if rankAfter(n) > 0 and not talentRequirementsMet(n, rankAfter, spentAfter) then
+        local r = talentRank(n)
+        if n.id == node.id then
+            r = r - 1
+        end
+        if r > 0 and not talentRowMet(n, spentAfter) then
             dangling = true
         end
     end)
