@@ -6,6 +6,7 @@
 #include "DBCStructure.h"
 #include "Opcodes.h"
 #include "Player.h"
+#include "Pet.h"
 #include "SpellAuraEffects.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
@@ -180,4 +181,33 @@ void Classless_ClearLearnedTalentSpells(Player* player)
                 ErasePlayerSpell(player, info->RankID[r]);
         }
     }
+}
+
+uint32 Classless_GetPetTalentTabs(Player* player, uint32* out, uint32 maxOut)
+{
+    if (!player || !out || maxOut == 0)
+        return 0;
+    Pet* pet = player->GetPet();
+    if (!pet)
+        return 0;
+    CreatureTemplate const* ci = pet->GetCreatureTemplate();
+    if (!ci)
+        return 0;
+    CreatureFamilyEntry const* family = sCreatureFamilyStore.LookupEntry(ci->family);
+    if (!family || family->petTalentType < 0)
+        return 0;
+
+    uint32 count = 0;
+    for (uint32 tabId = 1; tabId < sTalentTabStore.GetNumRows(); ++tabId)
+    {
+        TalentTabEntry const* tab = sTalentTabStore.LookupEntry(tabId);
+        if (!tab || !tab->petTalentMask)
+            continue;
+        if (!((1u << family->petTalentType) & tab->petTalentMask))
+            continue;
+        out[count++] = tabId;
+        if (count >= maxOut)
+            break;
+    }
+    return count;
 }

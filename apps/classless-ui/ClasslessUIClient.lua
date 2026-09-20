@@ -495,7 +495,11 @@ local function forEachTalentNode(pet, fn)
         return
     end
     if pet then
-        for _, tabId in ipairs(Catalog.petTabs or { 409, 410, 411 }) do
+        local tabs = ui.state.petTabs
+        if type(tabs) ~= "table" or #tabs < 1 then
+            tabs = Catalog.petTabs or { 409, 410, 411 }
+        end
+        for _, tabId in ipairs(tabs) do
             local nodes = Catalog.talents[tabId]
             if nodes then
                 for i = 1, #nodes do
@@ -2208,9 +2212,19 @@ function refreshPanes()
 
     if ui.selectedExtra == "pet" then
         ui.spellPane.Title:SetText(hasPetOut() and "Pet abilities" or "Summon a pet")
-        ui.talentPane.Title:SetText("Pet talents")
-        local petTabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
-        setPaneTalentArt(ui.talentPane, petTabs[1])
+        local tabs = ui.state.petTabs
+        if type(tabs) ~= "table" or #tabs < 1 then
+            tabs = {}
+        end
+        local tabName = "Pet talents"
+        if tabs[1] and Catalog and Catalog.tabBg and Catalog.tabBg[tabs[1]] then
+            local bg = Catalog.tabBg[tabs[1]]
+            if type(bg) == "string" then
+                tabName = bg:gsub("HunterPet", "") .. " talents"
+            end
+        end
+        ui.talentPane.Title:SetText(tabName)
+        setPaneTalentArt(ui.talentPane, tabs[1])
         hidePool(ui.rightSpellButtons, 1)
         local petIds = {}
         for _, id in ipairs((Catalog and Catalog.petSpells) or {}) do
@@ -2219,7 +2233,6 @@ function refreshPanes()
             end
         end
         renderSpellbook(petIds, ui.spellPane, ui.spellButtons)
-        local tabs = (Catalog and Catalog.petTabs) or { 409, 410, 411 }
         local used = 0
         local totalHeight = 0
         for _, tabId in ipairs(tabs) do
@@ -2520,6 +2533,7 @@ function Handlers.ApplyState(player, state)
             altCosts = altCosts,
             petLearned = petLearned,
             petOut = state.petOut and true or false,
+            petTabs = type(state.petTabs) == "table" and state.petTabs or {},
             points = tonumber(state.points) or 0,
             petPoints = tonumber(state.petPoints) or 0,
         }

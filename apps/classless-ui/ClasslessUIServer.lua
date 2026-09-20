@@ -585,6 +585,24 @@ local function petFreeTalentPoints(player, pet)
     return current
 end
 
+local function collectPetTalentTabs(player)
+    local tabs = {}
+    if not player or not player.GetClasslessPetTalentTabs then
+        return tabs
+    end
+    local ok, t = pcall(player.GetClasslessPetTalentTabs, player)
+    if not ok or type(t) ~= "table" then
+        return tabs
+    end
+    for i = 1, #t do
+        local id = tonumber(t[i])
+        if id then
+            tabs[#tabs + 1] = id
+        end
+    end
+    return tabs
+end
+
 local function sendState(player)
     local points = 0
     if player.GetFreeTalentPoints then
@@ -605,6 +623,7 @@ local function sendState(player)
         altCosts = altCosts,
         petLearned = collectPetLearned(pet),
         petOut = pet ~= nil,
+        petTabs = collectPetTalentTabs(player),
         points = points,
         petPoints = petPoints,
     })
