@@ -634,6 +634,18 @@ local function sendState(player)
         points = player:GetFreeTalentPoints() or 0
     end
     local pet = player:GetPet()
+    local petAutoAllowed, petAutoOn = {}, {}
+    if player.GetClasslessPetAutocastMaps then
+        local ok, allowed, enabled = pcall(player.GetClasslessPetAutocastMaps, player)
+        if ok then
+            if type(allowed) == "table" then
+                petAutoAllowed = allowed
+            end
+            if type(enabled) == "table" then
+                petAutoOn = enabled
+            end
+        end
+    end
     local petPoints = 0
     if player.GetClasslessPetFreePoints then
         local ok, v = pcall(player.GetClasslessPetFreePoints, player)
@@ -651,6 +663,8 @@ local function sendState(player)
         petLearned = collectPetLearned(player, pet),
         petOut = pet ~= nil,
         petTabs = collectPetTalentTabs(player),
+        petAutocastable = petAutoAllowed,
+        petAutocast = petAutoOn,
         points = points,
         petPoints = petPoints,
     })
@@ -716,6 +730,30 @@ function Handlers.CastSpell(player, spellId)
         target = player
     end
     player:CastSpell(target, spellId, false)
+end
+
+function Handlers.CastPetSpell(player, spellId)
+    if not classlessEnabled() then
+        return
+    end
+    spellId = tonumber(spellId)
+    if type(spellId) ~= "number" or not player or not player.ClasslessPetCastSpell then
+        return
+    end
+    pcall(player.ClasslessPetCastSpell, player, spellId)
+    sendState(player)
+end
+
+function Handlers.TogglePetAutocast(player, spellId)
+    if not classlessEnabled() then
+        return
+    end
+    spellId = tonumber(spellId)
+    if type(spellId) ~= "number" or not player or not player.ClasslessPetToggleAutocast then
+        return
+    end
+    pcall(player.ClasslessPetToggleAutocast, player, spellId)
+    sendState(player)
 end
 
 local function talentPrereqsOk(player, hasFn, node, rank)

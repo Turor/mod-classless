@@ -963,11 +963,21 @@ local function createSpellButton(index, parent)
     btn.Cooldown = cooldown
 
     local autoCast = iconBtn:CreateTexture(nil, "OVERLAY")
-    autoCast:SetSize(SPELL_ICON + 14, SPELL_ICON + 14)
+    autoCast:SetSize(60, 60)
     autoCast:SetPoint("CENTER", iconBtn, "CENTER")
     autoCast:SetTexture("Interface\\Buttons\\UI-AutoCastableOverlay")
+    autoCast:SetVertexColor(1, 1, 1)
     autoCast:Hide()
     btn.AutoCastable = autoCast
+
+    local shine = CreateFrame("Frame", name .. "Shine", iconBtn, "AutoCastShineTemplate")
+    shine:SetPoint("CENTER", iconBtn, "CENTER")
+    shine:SetSize(SPELL_ICON, SPELL_ICON)
+    if not shine.sparkles and AutoCastShine_OnLoad then
+        AutoCastShine_OnLoad(shine)
+    end
+    shine:Hide()
+    btn.AutoCastShine = shine
 
     local plus = iconBtn:CreateTexture(nil, "OVERLAY")
     plus:SetSize(18, 18)
@@ -1089,20 +1099,19 @@ local function createSpellButton(index, parent)
     end)
     iconBtn:SetScript("OnClick", function(self, mouse)
         if btn.family and btn.family.petSlot then
-            local slot = btn.family.petSlot
+            local petSpellId = selectedId()
             if mouse == "RightButton" then
-                if ToggleSpellAutocast then
-                    ToggleSpellAutocast(slot, "pet")
+                if petSpellId then
+                    AIO.Handle("ClasslessUIServer", "TogglePetAutocast", petSpellId)
                 end
-                refreshPanes()
                 return
             end
             if IsModifiedClick and IsModifiedClick("PICKUPACTION") then
-                PickupSpell(slot, "pet")
+                PickupSpell(btn.family.petSlot, "pet")
                 return
             end
-            if CastSpell then
-                CastSpell(slot, "pet")
+            if petSpellId then
+                AIO.Handle("ClasslessUIServer", "CastPetSpell", petSpellId)
             end
             return
         end
@@ -1412,15 +1421,35 @@ local function renderSpellbook(ids, pane, pool, preFamilies)
         end
         if btn.AutoCastable then
             btn.AutoCastable:Hide()
+            local petId = fam.ids and fam.ids[1]
+            local allowed = fam.petSlot and (
+                (ui.state.petAutocastable and (ui.state.petAutocastable[petId] or ui.state.petAutocastable[tostring(petId)]))
+                or false
+            )
+            local enabled = fam.petSlot and (
+                (ui.state.petAutocast and (ui.state.petAutocast[petId] or ui.state.petAutocast[tostring(petId)]))
+                or false
+            )
             if fam.petSlot and GetSpellAutocast then
-                local allowed, enabled = GetSpellAutocast(fam.petSlot, "pet")
-                if allowed then
-                    btn.AutoCastable:Show()
-                    if enabled then
-                        btn.AutoCastable:SetVertexColor(1, 1, 1)
-                    else
-                        btn.AutoCastable:SetVertexColor(0.55, 0.55, 0.55)
-                    end
+                local a, e = GetSpellAutocast(fam.petSlot, "pet")
+                if a then
+                    allowed = true
+                end
+                if e then
+                    enabled = true
+                end
+            end
+            if allowed then
+                btn.AutoCastable:SetVertexColor(1, 1, 1)
+                btn.AutoCastable:Show()
+            end
+            if btn.AutoCastShine then
+                if enabled and AutoCastShine_AutoCastStart then
+                    btn.AutoCastShine:Show()
+                    AutoCastShine_AutoCastStart(btn.AutoCastShine)
+                elseif AutoCastShine_AutoCastStop then
+                    AutoCastShine_AutoCastStop(btn.AutoCastShine)
+                    btn.AutoCastShine:Hide()
                 end
             end
         end
@@ -2664,6 +2693,8 @@ function Handlers.ApplyState(player, state)
             petLearned = petLearned,
             petOut = state.petOut and true or false,
             petTabs = type(state.petTabs) == "table" and state.petTabs or {},
+            petAutocastable = type(state.petAutocastable) == "table" and state.petAutocastable or {},
+            petAutocast = type(state.petAutocast) == "table" and state.petAutocast or {},
             points = tonumber(state.points) or 0,
             petPoints = tonumber(state.petPoints) or 0,
         }
@@ -2681,6 +2712,7 @@ events:RegisterEvent("PLAYER_TALENT_UPDATE")
 events:RegisterEvent("CHARACTER_POINTS_CHANGED")
 events:RegisterEvent("SPELL_UPDATE_COOLDOWN")
 events:RegisterEvent("ACTIONBAR_UPDATE_COOLDOWN")
+events:RegisterEvent("PET_BAR_UPDATE")
 local lastStateReq = 0
 events:SetScript("OnEvent", function(_, event, unit)
     if event == "UNIT_PET" and unit ~= "player" then

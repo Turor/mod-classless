@@ -6,6 +6,7 @@
 #include "Pet.h"
 #include "PetDefines.h"
 #include "Player.h"
+#include "SpellInfo.h"
 #include "SpellMgr.h"
 
 static constexpr uint32 PET_POINTS_PER_ROW = 3;
@@ -224,4 +225,75 @@ bool ClasslessPet_Unlearn(Player* player, uint32 talentId)
 
     ClasslessPet_Save(player, pet);
     return true;
+}
+
+bool ClasslessPet_Cast(Player* player, uint32 spellId)
+{
+    if (!Classless_IsEnabled() || !player || !spellId)
+        return false;
+    Pet* pet = ClasslessPet_Get(player);
+    if (!pet)
+        return false;
+    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId);
+    if (!info || info->IsPassive() || !pet->HasSpell(spellId))
+        return false;
+    Unit* target = player->GetSelectedUnit();
+    if (!target)
+        target = pet->GetVictim();
+    if (!target)
+        target = pet;
+    pet->CastSpell(target, spellId, false);
+    return true;
+}
+
+bool ClasslessPet_IsAutocastable(Player* player, uint32 spellId)
+{
+    Pet* pet = ClasslessPet_Get(player);
+    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId);
+    return pet && info && info->IsAutocastable() && pet->HasSpell(spellId);
+}
+
+bool ClasslessPet_IsAutocast(Player* player, uint32 spellId)
+{
+    Pet* pet = ClasslessPet_Get(player);
+    if (!pet)
+        return false;
+    auto itr = pet->m_spells.find(spellId);
+    if (itr == pet->m_spells.end() || itr->second.state == PETSPELL_REMOVED)
+        return false;
+    return itr->second.active == ACT_ENABLED;
+}
+
+bool ClasslessPet_ToggleAutocast(Player* player, uint32 spellId)
+{
+    if (!Classless_IsEnabled() || !player || !spellId)
+        return false;
+    Pet* pet = ClasslessPet_Get(player);
+    SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId);
+    if (!pet || !info || !info->IsAutocastable() || !pet->HasSpell(spellId))
+        return false;
+    pet->ToggleAutocast(info, !ClasslessPet_IsAutocast(player, spellId));
+    ClasslessPet_Save(player, pet);
+    player->PetSpellInitialize();
+    return true;
+}
+
+void ClasslessPet_AutocastMaps(Player* player, std::vector<uint32>& allowed, std::vector<uint32>& enabled)
+{
+    allowed.clear();
+    enabled.clear();
+    Pet* pet = ClasslessPet_Get(player);
+    if (!pet)
+        return;
+    for (PetSpellMap::const_iterator itr = pet->m_spells.begin(); itr != pet->m_spells.end(); ++itr)
+    {
+        if (itr->second.state == PETSPELL_REMOVED)
+            continue;
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(itr->first);
+        if (!info || !info->IsAutocastable())
+            continue;
+        allowed.push_back(itr->first);
+        if (itr->second.active == ACT_ENABLED)
+            enabled.push_back(itr->first);
+    }
 }
