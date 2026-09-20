@@ -7,8 +7,11 @@ The goal of this module is to provide a classless version of the Wotlk version o
 be curated for small groups of players, and there will be no PvP balance. The purpose of this module is to develop overpowered
 builds.
 
-Progression is primarily handled through talent points which are computed based off of the level of the player + the number of
-unlocked achievements. There is currently no cap- although a configuration setting for a talent cap is planned.
+Progression is primarily handled through talent points which are computed based off of the level of the player, plus a configurable
+scalar times listed completed achievements (`ClasslessModule.AchievementTalentPoints`; `0` turns that bonus off). There is currently
+no cap- although a configuration setting for a talent cap is planned.
+
+Toggle the whole module with `ClasslessModule.Enable` in `conf/classless.conf`.
 
 ## Creating the dbcs
 
@@ -200,7 +203,8 @@ After generating the MPQ, it is important to review its appearance to ensure eve
 - cargo run -p wow_custom_dbc -- wrath -o /usr/games/wow/server/data -i /usr/games/wow/
 
 ## Implemented Features
-- Talent points are computed based off of the player's achievements and level.
+- Talent points are computed from player level, plus `ClasslessModule.AchievementTalentPoints` × listed achievements (`0` disables the bonus).
+- `ClasslessModule.Enable` turns the module (and classless UI) off without unloading worldserver.
 - Trainers can train any class
 - Players can learn any talent from any tree
 - Portal Master to dungeons

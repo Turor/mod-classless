@@ -1,4 +1,72 @@
--- this is a UI for displaying energy/rage
+local AIO = AIO or require("AIO")
+if AIO.AddAddon() then
+    return
+end
+
+-- Classless energy/rage/mana/runic HUD. Textures stay in patch-n.mpq under
+-- Interface\AddOns\ClasslessUIAddons\textures (no loadable addon toc).
+if ClasslessResourceFrame then
+    return
+end
+
+local ResourceBar = AIO.AddHandlers("ClasslessResourceBar", {})
+local pendingRuneCds
+local moduleEnabled = true
+
+function ResourceBar.SetEnabled(_, enabled)
+    moduleEnabled = enabled == true or enabled == 1
+    if ClasslessResourceFrame then
+        if moduleEnabled then
+            ClasslessResourceFrame:Show()
+        else
+            ClasslessResourceFrame:Hide()
+        end
+    end
+end
+
+local function applyRuneCooldownMs(i, remMs)
+    local btn = ClasslessRunes and ClasslessRunes[i]
+    if not btn or not btn.cooldown then
+        return
+    end
+    remMs = tonumber(remMs) or 0
+    if remMs > 50 then
+        local rem = remMs / 1000
+        local total = math.max(10, rem)
+        btn.cooldown:SetCooldown(GetTime() - (total - rem), total)
+        btn.cooldown:Show()
+    else
+        btn.cooldown:Hide()
+    end
+end
+
+local function applyPendingRuneCds()
+    if type(pendingRuneCds) ~= "table" then
+        return
+    end
+    for i = 1, 6 do
+        applyRuneCooldownMs(i, pendingRuneCds[i] or pendingRuneCds[tostring(i)])
+    end
+end
+
+function ResourceBar.ApplyRuneCooldowns(player, cds)
+    if not moduleEnabled then
+        return
+    end
+    pendingRuneCds = cds
+    applyPendingRuneCds()
+end
+
+AIO.AddSavedVarChar("Energy_Textures")
+AIO.AddSavedVarChar("Energy_ShowText")
+AIO.AddSavedVarChar("Rage_Textures")
+AIO.AddSavedVarChar("Rage_ShowText")
+AIO.AddSavedVarChar("Mana_Textures")
+AIO.AddSavedVarChar("Mana_ShowText")
+AIO.AddSavedVarChar("Runic_Textures")
+AIO.AddSavedVarChar("Runic_ShowText")
+AIO.AddSavedVarChar("ConfigFrame_varis")
+
 
 local FirstTime = true;
 local CLASSLESS_RUNETYPE_BLOOD = 1;
@@ -34,8 +102,13 @@ local classlessRuneMapping = {
 
 
 function ClasslessCooldownFrame_SetTimer(self, start, duration, enable)
+	if not self then
+		return
+	end
+	start = tonumber(start) or 0
+	duration = tonumber(duration) or 0
+	enable = tonumber(enable) or 0
 	if ( start > 0 and duration > 0 and enable > 0) then
-
 		self:SetCooldown(start, duration);
 		self:Show();
 	else
@@ -48,12 +121,32 @@ function ClasslessRuneButton_OnLoad (self)
 end
 
 function ClasslessRuneButton_OnUpdate (self, elapsed)
-	local cooldown = self.cooldown;
+	-- Server-pushed remaining ms is the classless source of truth (every class).
+	if pendingRuneCds then
+		self:SetScript("OnUpdate", nil);
+		return
+	end
+	local cooldown = self.cooldown or _G[self:GetName().."Cooldown"];
+	if not GetRuneCooldown then
+		self:SetScript("OnUpdate", nil);
+		return
+	end
 	local start, duration, runeReady = GetRuneCooldown(self:GetID());
+	start = tonumber(start) or 0
+	duration = tonumber(duration) or 0
 	local displayCooldown = (runeReady and 0) or 1;
-	ClasslessCooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
-
-	if ( runeReady ) then
+	if start > 0 and duration > 0 and displayCooldown > 0 then
+		if CooldownFrame_SetTimer then
+			CooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+		else
+			ClasslessCooldownFrame_SetTimer(cooldown, start, duration, displayCooldown);
+		end
+	elseif runeReady then
+		if CooldownFrame_SetTimer then
+			CooldownFrame_SetTimer(cooldown, 0, 0, 0);
+		else
+			ClasslessCooldownFrame_SetTimer(cooldown, 0, 0, 0);
+		end
 		self:SetScript("OnUpdate", nil);
 	end
 end
@@ -61,9 +154,11 @@ end
 function ClasslessRuneButton_Update (self, classlessRuneType, dontFlash)
 	local runeType = self.runeType
 
-	if ( (not dontFlash) and (classlessRuneType) and (classlessRuneType ~= self.rune.runeType)) then
-		self.shineTex:SetVertexColor(unpack(classlessRuneColors[runeType]));
-		ClasslessRuneButton_ShineFadeIn(self.shineTex)
+	if ( (not dontFlash) and (classlessRuneType) and (classlessRuneType ~= self.runeType)) then
+		if self.shine and self.shine.shineTex then
+			self.shine.shineTex:SetVertexColor(unpack(classlessRuneColors[runeType] or classlessRuneColors[1]));
+			ClasslessRuneButton_ShineFadeIn(self.shine)
+		end
 	end
 
 	if (classlessRuneType) then
@@ -91,20 +186,47 @@ function ClasslessRuneButton_OnLeave(self)
 	GameTooltip:Hide();
 end
 
+local function syncClasslessRuneCooldowns(runeFrame)
+	runeFrame = runeFrame or ClasslessRuneFrame
+	if not runeFrame or not runeFrame.runes then
+		return
+	end
+	for i = 1, #(runeFrame.runes) do
+		local btn = runeFrame.runes[i]
+		if btn then
+			btn:SetScript("OnUpdate", ClasslessRuneButton_OnUpdate)
+			ClasslessRuneButton_OnUpdate(btn, 0)
+		end
+	end
+end
+
 function ClasslessRuneFrame_OnEvent (self, event, ...)
 	if ( event == "RUNE_POWER_UPDATE" ) then
-		local rune, usable = ...;
-		if ( not usable and rune and self.runes[rune] ) then
-			self.runes[rune]:SetScript("OnUpdate", ClasslessRuneButton_OnUpdate);
-		elseif ( usable and rune and self.runes[rune] ) then
-			self.runes[rune].shine.shineTex:SetVertexColor(1, 1, 1);
-			ClasslessRuneButton_ShineFadeIn(self.runes[rune].shine)
+		local rune = ...;
+		if ( rune and self.runes[rune] ) then
+			local btn = self.runes[rune]
+			btn:SetScript("OnUpdate", ClasslessRuneButton_OnUpdate)
+			ClasslessRuneButton_OnUpdate(btn, 0)
+			local _, _, ready = GetRuneCooldown and GetRuneCooldown(btn:GetID())
+			if ready and btn.shine and btn.shine.shineTex then
+				btn.shine.shineTex:SetVertexColor(1, 1, 1);
+				ClasslessRuneButton_ShineFadeIn(btn.shine)
+			end
+		else
+			syncClasslessRuneCooldowns(self)
 		end
 	elseif ( event == "RUNE_TYPE_UPDATE" ) then
         local rune = ...;
-        if ( rune ) then
-            ClasslessRuneButton_Update(self.runes[rune], rune);
+        if ( rune and self.runes[rune] ) then
+            local t = GetRuneType and GetRuneType(rune)
+            ClasslessRuneButton_Update(self.runes[rune], t or self.runes[rune].runeType);
         end
+    elseif ( event == "PLAYER_ENTERING_WORLD" ) then
+        for i = 1, #(self.runes or {}) do
+            local t = GetRuneType and GetRuneType(i)
+            ClasslessRuneButton_Update(self.runes[i], t or self.runes[i].runeType, true);
+        end
+        syncClasslessRuneCooldowns(self)
     end
 end
 
@@ -150,31 +272,29 @@ local function GetRuneTypeForIndex(index)
 end
 
 
-local MainFrame = CreateFrame("Frame","MainFrame",UIParent,nil)
-MainFrame:SetSize(100,80)
-MainFrame:SetPoint("TOPLEFT", 258, -25)
-MainFrame:SetMovable(true)
-MainFrame:EnableMouse(true)
-MainFrame:RegisterForDrag("LeftButton")
-MainFrame:SetClampedToScreen(true)
---MainFrame:SetUserPlaced(true)
-local MainFrameTexture = MainFrame:CreateTexture()
-MainFrameTexture:SetAllPoints(MainFrame)
-MainFrameTexture:SetTexture(.1,.1,.1,1)
-MainFrame:SetScript("OnDragStart", MainFrame.StartMoving)
-MainFrame:SetScript("OnHide", MainFrame.StopMovingOrSizing)
-MainFrame:SetScript("OnDragStop", MainFrame.StopMovingOrSizing)
+local ClasslessResourceFrame = CreateFrame("Frame","ClasslessResourceFrame",UIParent,nil)
+ClasslessResourceFrame:SetSize(100,80)
+ClasslessResourceFrame:SetPoint("TOPLEFT", 258, -25)
+ClasslessResourceFrame:SetMovable(true)
+ClasslessResourceFrame:EnableMouse(true)
+ClasslessResourceFrame:RegisterForDrag("LeftButton")
+ClasslessResourceFrame:SetClampedToScreen(true)
+--ClasslessResourceFrame:SetUserPlaced(true)
+local ClasslessResourceFrameTexture = ClasslessResourceFrame:CreateTexture()
+ClasslessResourceFrameTexture:SetAllPoints(ClasslessResourceFrame)
+ClasslessResourceFrameTexture:SetTexture(.1,.1,.1,1)
+ClasslessResourceFrame:SetScript("OnDragStart", ClasslessResourceFrame.StartMoving)
+ClasslessResourceFrame:SetScript("OnHide", ClasslessResourceFrame.StopMovingOrSizing)
+ClasslessResourceFrame:SetScript("OnDragStop", ClasslessResourceFrame.StopMovingOrSizing)
 	
-MainFrame:Show()
+ClasslessResourceFrame:Show()
 
-MainFrame:RegisterEvent("ADDON_LOADED")
-MainFrame:RegisterEvent("PLAYER_LOGOUT")
 
 
 -- Parent frame
-local ClasslessRuneFrame = CreateFrame("Frame", "ClasslessRuneFrame", MainFrame)
+local ClasslessRuneFrame = CreateFrame("Frame", "ClasslessRuneFrame", ClasslessResourceFrame)
 ClasslessRuneFrame:SetSize(32, 80)
-ClasslessRuneFrame:SetPoint("TOPLEFT", MainFrame, "TOPLEFT", -52, 0)
+ClasslessRuneFrame:SetPoint("TOPLEFT", ClasslessResourceFrame, "TOPLEFT", -52, 0)
 
 ClasslessRuneFrame.runes = {};
 
@@ -219,29 +339,25 @@ for i = 1, RUNE_COUNT do
         "ClasslessRune" .. i .. "Icon",
         "ARTWORK"
     )
-    runeTex:SetSize(24, 24)
-    runeTex:SetPoint("CENTER", rune, "CENTER", 0, -1)
+    runeTex:SetSize(RUNE_SIZE, RUNE_SIZE)
+    runeTex:SetPoint("CENTER", rune, "CENTER", 0, 0)
     runeTex:SetTexture(classlessRuneIconTextures[runeType])
 
-
-    -- ============================================================
-    -- Border Frame
-    -- ============================================================
+    -- Ring sits above the cooldown so the swipe reads as a circle.
     local border = CreateFrame(
         "Frame",
         "ClasslessRune" .. i .. "Border",
         rune
     )
-    border:SetSize(18, 18)
-    border:SetPoint("CENTER", rune, "CENTER", 0, -1)
-    border:SetFrameLevel(rune:GetFrameLevel()-1)
+    border:SetSize(RUNE_SIZE, RUNE_SIZE)
+    border:SetPoint("CENTER", rune, "CENTER", 0, 0)
 
     local borderTex = border:CreateTexture(
         "ClasslessRune" .. i .. "BorderTexture",
         "OVERLAY"
     )
     borderTex:SetAllPoints(border)
-    borderTex:SetTexture(classlessRuneTextures[runeType])
+    borderTex:SetTexture("Interface\\PlayerFrame\\UI-PlayerFrame-Deathknight-Ring")
     borderTex:SetVertexColor(0.6, 0.6, 0.6, 1)
     border.borderTex = borderTex
 
@@ -268,22 +384,25 @@ for i = 1, RUNE_COUNT do
     shineTex:SetTexCoord(0.5625, 1, 0, 1)
     shine.shineTex = shineTex
 
-    -- ============================================================
-    -- Cooldown
-    -- ============================================================
+    -- Engine cooldown is always a square. Size it to the circle inscribed in
+    -- the rune so the dark swipe stays on the art and does not box the corners.
+    -- Stock is 15px on a 24px icon; 18px covers more of a 24px rune.
+    local cdSize = 18
     local cd = CreateFrame(
         "Cooldown",
         "ClasslessRune" .. i .. "Cooldown",
-        rune,
-        "CooldownFrameTemplate"
+        rune
     )
-    cd:SetSize(15,15)
     cd:ClearAllPoints()
-    cd:SetPoint("CENTER", rune, "CENTER", 0, -1)
-    cd:SetDrawEdge(true)
-    cd:SetFrameLevel(rune:GetFrameLevel() + 2)
-    cd:SetReverse(true)
-    cd:Show()
+    cd:SetSize(cdSize, cdSize)
+    cd:SetPoint("CENTER", runeTex, "CENTER", 0, 0)
+    if cd.SetDrawEdge then
+        cd:SetDrawEdge(true)
+    end
+    cd:SetFrameLevel(rune:GetFrameLevel() + 4)
+    cd:Hide()
+
+    border:SetFrameLevel(cd:GetFrameLevel() + 1)
 
 
     -- ============================================================
@@ -323,13 +442,15 @@ for i = 1, RUNE_COUNT do
 ClasslessRuneButton_Update(ClasslessRunes[i], ClasslessRunes[i].runeType, true)
 end
 
-
-
 ClasslessRuneFrame:RegisterEvent("RUNE_POWER_UPDATE");
 ClasslessRuneFrame:RegisterEvent("RUNE_TYPE_UPDATE");
 ClasslessRuneFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
 
 ClasslessRuneFrame:SetScript("OnEvent", ClasslessRuneFrame_OnEvent);
+ClasslessRuneFrame:Show();
+syncClasslessRuneCooldowns(ClasslessRuneFrame)
+applyPendingRuneCds()
+AIO.Handle("ClasslessResourceBarServer", "RequestRuneCooldowns")
 
 
 
@@ -337,7 +458,7 @@ ClasslessRuneFrame:SetScript("OnEvent", ClasslessRuneFrame_OnEvent);
 current_energy = UnitPower("player", 3)
 max_energy = UnitPowerMax("player", 3)
 
-local EnergyFrame = CreateFrame("Frame","EnergyFrame",MainFrame,nil)
+local EnergyFrame = CreateFrame("Frame","EnergyFrame",ClasslessResourceFrame,nil)
 EnergyFrame:SetSize(100,20)
 
 
@@ -397,7 +518,7 @@ end
 current_rage = UnitPower("player",1)
 max_rage = UnitPowerMax("player",1)
 
-local RageFrame = CreateFrame("Frame","RageFrame",MainFrame,nil)
+local RageFrame = CreateFrame("Frame","RageFrame",ClasslessResourceFrame,nil)
 RageFrame:SetSize(100,20)
 
 
@@ -447,12 +568,13 @@ function RageFrame_eventHandler(self, event, ...)
 	end
 end
 
-local RunicFrame = CreateFrame("Frame", "RunicFrame", MainFrame, nil)
+local RunicFrame = CreateFrame("Frame", "RunicFrame", ClasslessResourceFrame, nil)
 RunicFrame:SetSize(100, 20)
 
 RunicStatusBar = CreateFrame("StatusBar", nil, RunicFrame)
 RunicStatusBar:SetPoint("LEFT")
 RunicStatusBar:SetPoint("RIGHT", 0, 0)
+RunicStatusBar:SetHeight(20)
 RunicStatusBar:SetMinMaxValues(0, 100)
 RunicStatusBar:SetStatusBarColor(0, 0.82, 1) -- Standard Runic Power Cyan
 
@@ -501,7 +623,7 @@ end)
 current_mana = UnitPower("player",0)
 max_mana = UnitPowerMax("player",0)
 
-local ManaFrame = CreateFrame("Frame","ManaFrame",MainFrame,nil)
+local ManaFrame = CreateFrame("Frame","ManaFrame",ClasslessResourceFrame,nil)
 ManaFrame:SetSize(100,20)
 
 
@@ -558,7 +680,7 @@ end
 
 -- below is used for displaying the drop down menu on right click
 
-local DropDownMenu = CreateFrame("Frame","MainFrameDropDownMenu")
+local DropDownMenu = CreateFrame("Frame","ClasslessResourceDropDown")
 DropDownMenu.displayMode = "MENU"
 
 local info = {}
@@ -608,7 +730,7 @@ DropDownMenu.initialize = function(self, level)
 	end
 end
 
-function OnMouseDown_MainFrame(self, button)
+function OnMouseDown_ClasslessResourceFrame(self, button)
 
 	if button == "RightButton" then
 		ToggleDropDownMenu(1, nil, DropDownMenu, self:GetName(), 0, 0)
@@ -616,7 +738,7 @@ function OnMouseDown_MainFrame(self, button)
 
 end
 
-MainFrame:SetScript("OnMouseDown", OnMouseDown_MainFrame)
+ClasslessResourceFrame:SetScript("OnMouseDown", OnMouseDown_ClasslessResourceFrame)
 
 -- below is the config frames
 
@@ -790,7 +912,7 @@ function init_loadUp()
     RunicGSlider:SetValue(Runic_Textures[2] * 100)
     RunicBSlider:SetValue(Runic_Textures[3] * 100)
 
-	MainFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3] * 3 + 2)
+	ClasslessResourceFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3] * 4 + 2)
 	EnergyFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3])
 	EnergyStatusBar:SetHeight(ConfigFrame_varis[3])
 	RageFrame:SetSize(ConfigFrame_varis[2],ConfigFrame_varis[3])
@@ -1322,8 +1444,8 @@ local FirstTextChecker = CreateFrame("CheckButton","FirstTextChecker",ConfigFram
 FirstTextChecker:SetPoint("CENTER", -20, -50)
 FirstTextChecker.tooltip = "Whether energy is first or not.\nmay require reload"
 
-function MainFrame:OnEvent(event, arg1)
-	if event == "ADDON_LOADED" and arg1 == "ClasslessUIAddons" then
+local function loadResourceBarSettings()
+	do
 		if Energy_Textures == nil then
 			Energy_Textures = {1,1,0}
 		end
@@ -1403,7 +1525,8 @@ function MainFrame:OnEvent(event, arg1)
 	end
 end
 
-MainFrame:SetScript("OnEvent", MainFrame.OnEvent)
+loadResourceBarSettings()
+
 ManaFrame:SetScript("OnEvent", ManaFrame_eventHandler)
 RageFrame:SetScript("OnEvent", RageFrame_eventHandler)
 EnergyFrame:SetScript("OnEvent", EnergyFrame_eventHandler)

@@ -13,3 +13,6 @@
 [submodule "apps/teleporter"]
 	path = apps/teleporter
 	url = https://github.com/Turor/TeleportSelector.git
+[submodule "apps/consoleport-lk"]
+	path = apps/consoleport-lk
+	url = git@github.com:Turor/ConsolePortLK.git

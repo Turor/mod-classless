@@ -17,6 +17,7 @@ public:
     Optional<bool> OnPlayerIsClass(Player const*, Classes, ClassContext context) override;
     bool OnPlayerLearnTalentUseAlternativeLogic(Player* player, uint32 talentId, uint32 talentRank, bool command) override;
     void OnPlayerCalculateTalentsPoints(Player const* player, uint32& talentPointsForLevel) override;
+    void OnPlayerTalentsReset(Player* player, bool noCost) override;
     bool OnUpdateAttackPowerAndDamageReplaceWithAlternativeCalculation(Player* player, bool ranged) override;
     bool OnPlayerHasActivePowerType(Player const* player, Powers power) override;
     bool OnPlayerUpdateParryUseAlternative(Player* player) override;
