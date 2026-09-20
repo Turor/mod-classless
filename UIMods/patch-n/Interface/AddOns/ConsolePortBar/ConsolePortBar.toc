@@ -4,6 +4,7 @@
 ## SavedVariables: ConsolePortBarManifest
 ## SavedVariablesPerCharacter: ConsolePortBarSetup
 ## RequiredDeps: ConsolePort
+## DefaultState: disabled
 
 Frame.xml
 

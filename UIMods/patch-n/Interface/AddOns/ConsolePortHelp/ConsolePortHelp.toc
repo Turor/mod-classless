@@ -3,6 +3,7 @@
 ## Notes: Tutorials and help pages for ConsolePort. Loaded on demand.
 ## RequiredDeps: ConsolePort
 ## LoadOnDemand: 1
+## DefaultState: disabled
 
 PageLoader.lua
 Pages.xml

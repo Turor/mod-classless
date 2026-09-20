@@ -2,5 +2,6 @@
 ## Title: Console Port |cff739BD0LK|r |cff69ccf0UI|r Loot
 ## Notes: Replaces loot frame.
 ## RequiredDeps: ConsolePort
+## DefaultState: disabled
 
 Frame.xml

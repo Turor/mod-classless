@@ -2,6 +2,7 @@
 ## Title: Console Port |cff739BD0LK|r |cff69ccf0UI|r Menu
 ## Notes: Replaces game menu.
 ## RequiredDeps: ConsolePort
+## DefaultState: disabled
 
 Menu_Button.lua
 Menu_LootButton.lua
