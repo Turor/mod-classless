@@ -6,7 +6,8 @@ end
 local Handlers = AIO.AddHandlers("ClasslessUIClient", {})
 local Catalog = ClasslessUICatalog
 
-local FRAME_W, FRAME_H = 1000, 700
+-- Narrowest layout: 2 spell cols + 4 talent cols + 210px sidebar.
+local FRAME_W, FRAME_H = 800, 560
 local PANE_PAD = 12
 local SIDEBAR_W = 210
 local NAV_ROW_H = 14
@@ -1096,7 +1097,7 @@ local function buildFrame()
     frame:SetMovable(true)
     frame:SetResizable(true)
     if frame.SetMinResize then
-        frame:SetMinResize(800, 520)
+        frame:SetMinResize(FRAME_W, FRAME_H)
         frame:SetMaxResize(FRAME_W, FRAME_H)
     end
     frame:EnableMouse(true)
