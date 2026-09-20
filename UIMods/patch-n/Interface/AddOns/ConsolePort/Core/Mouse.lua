@@ -162,6 +162,27 @@ local function UnitIsGUID(unit, queryGUID)
 	local guid = unit and UnitGUID(unit)
 	return (guid == queryGUID)
 end
+
+-- 3.3.5 has no INTERACTTARGET binding. Click this proxy instead so loot/NPC
+-- interact can call InteractUnit (protected in combat; works after combat).
+local INTERACT_PROXY = 'ConsolePortInteractProxy'
+local InteractProxy = _G[INTERACT_PROXY] or CreateFrame('Button', INTERACT_PROXY, UIParent)
+InteractProxy:RegisterForClicks('AnyUp')
+InteractProxy:SetScript('OnClick', function()
+	if UnitExists('mouseover') then
+		InteractUnit('mouseover')
+	elseif UnitExists('npc') then
+		InteractUnit('npc')
+	elseif UnitExists('target') then
+		InteractUnit('target')
+	end
+end)
+
+local function BindInteractClick(owner, key)
+	if key then
+		SetOverrideBindingClick(owner, true, key, INTERACT_PROXY)
+	end
+end
 ---------------------------------------------------------------
 
 function Camera:Toggle() if cameraMode then self:Stop() else self:Start() end end
@@ -462,7 +483,11 @@ for name, script in pairs({
 		if setType and binding then
 			local key = GetBindingKey(setType)
 			if key then
-				self:SetBinding(true, key, binding)
+				if binding == 'INTERACTTARGET' then
+					self:SetBindingClick(true, key, 'ConsolePortInteractProxy')
+				else
+					self:SetBinding(true, key, binding)
+				end
 			end
 		end
 	]],
@@ -625,7 +650,11 @@ end
 function Mouse:ToggleInsecureOverride(enabled, key, binding)
 	if enabled and not Core:HasUIFocus() then
 		self.insecureOverrideActive = true
-		SetOverrideBinding(self, true, key, binding)
+		if binding == 'INTERACTTARGET' then
+			BindInteractClick(self, key)
+		else
+			SetOverrideBinding(self, true, key, binding)
+		end
 	else
 		self.insecureOverrideActive = false
 		ClearOverrideBindings(self)
