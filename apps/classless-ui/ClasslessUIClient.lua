@@ -1030,32 +1030,32 @@ function refreshPanes()
     ui.spellPane.Points:SetText("")
 
     if ui.selectedGeneral and not ui.selectedExtra then
+        ui.spellPane:ClearAllPoints()
+        ui.spellPane:SetPoint("TOPLEFT")
+        ui.spellPane:SetPoint("BOTTOMRIGHT")
+        ui.talentPane:Hide()
         ui.spellPane.Title:SetText("General")
-        ui.talentPane.Title:SetText("General")
         setPaneTalentArt(ui.talentPane, nil)
         if ui.talentPane.PointsOverlay then
             ui.talentPane.PointsOverlay:Hide()
         end
         hidePool(ui.talentButtons, 1)
+        hidePool(ui.rightSpellButtons, 1)
         local all = {}
         for _, id in ipairs((Catalog and Catalog.generalSpells) or {}) do
             if isKnown(id) then
                 all[#all + 1] = id
             end
         end
-        local fams = groupSpellFamilies(all)
-        local mid = math.ceil(#fams / 2)
-        local left, right = {}, {}
-        for i, fam in ipairs(fams) do
-            local bucket = (i <= mid) and left or right
-            for _, id in ipairs(fam.ids) do
-                bucket[#bucket + 1] = id
-            end
-        end
-        renderSpellbook(left, ui.spellPane, ui.spellButtons)
-        renderSpellbook(right, ui.talentPane, ui.rightSpellButtons)
+        renderSpellbook(all, ui.spellPane, ui.spellButtons)
         return
     end
+
+    ui.spellPane:ClearAllPoints()
+    ui.spellPane:SetPoint("TOPLEFT")
+    ui.spellPane:SetPoint("BOTTOMLEFT")
+    ui.spellPane:SetPoint("RIGHT", ui.spellPane:GetParent(), "CENTER", 0, 0)
+    ui.talentPane:Show()
 
     if ui.selectedExtra == "glyph" then
         ui.spellPane.Title:SetText(className .. " glyphs")
