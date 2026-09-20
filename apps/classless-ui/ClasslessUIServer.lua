@@ -21,13 +21,29 @@ local function spellName(spellId)
     return names
 end
 
+local dkSpellSet
+local function isDkSpell(spellId)
+    if not dkSpellSet then
+        dkSpellSet = {}
+        local specs = Catalog and Catalog.spells and Catalog.spells[6]
+        if specs then
+            for _, ids in pairs(specs) do
+                for i = 1, #ids do
+                    dkSpellSet[ids[i]] = true
+                end
+            end
+        end
+    end
+    return dkSpellSet[spellId]
+end
+
 local function spellLevel(spellId)
     if not LookupEntry then
-        return 0
+        return isDkSpell(spellId) and 55 or 0
     end
     local entry = LookupEntry("Spell", spellId)
     if not entry then
-        return 0
+        return isDkSpell(spellId) and 55 or 0
     end
     local level = 0
     if entry.GetSpellLevel then
@@ -35,6 +51,9 @@ local function spellLevel(spellId)
     end
     if level == 0 and entry.GetBaseLevel then
         level = entry:GetBaseLevel() or 0
+    end
+    if isDkSpell(spellId) and level < 55 then
+        level = 55
     end
     return level
 end
