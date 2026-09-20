@@ -1384,8 +1384,11 @@ local function layoutNav()
     end
     placeWide(ui.navGeneral, 0)
     placeWide(ui.navGlyph, 1)
+    if ui.navPet then
+        placeWide(ui.navPet, 2)
+    end
     local order = Catalog and Catalog.classOrder or {}
-    local idx = 2
+    local idx = 3
     for _, classId in ipairs(order) do
         local block = ui.navClassBlocks and ui.navClassBlocks[classId]
         local specBtns = ui.navSpecButtons[classId]
@@ -1409,9 +1412,6 @@ local function layoutNav()
             end
         end
         idx = idx + 3
-    end
-    if ui.navPet then
-        placeWide(ui.navPet, 32)
     end
 end
 
@@ -2128,7 +2128,15 @@ local function buildFrame()
         selectExtra("glyph")
     end, 0.35, 0.55, 0.35)
     ui.navGlyph:SetPoint("TOPLEFT", 0, y)
-    y = y - (NAV_ROW_H + 2)
+    y = y - NAV_ROW_H
+
+    ui.navPet = addWideNav("ClasslessUINavPet", "Pet", function()
+        if hasPetOut() then
+            selectExtra("pet")
+        end
+    end, 0.45, 0.3, 0.15)
+    ui.navPet:SetPoint("TOPLEFT", 0, y)
+    y = y - NAV_ROW_H
 
     local blockH = NAV_ROW_H * 3 + NAV_SPEC_GAP * 2
     local iconSz = blockH
@@ -2169,14 +2177,6 @@ local function buildFrame()
         block.ClassIcon = icon
         y = y - blockH
     end
-
-    ui.navPet = addWideNav("ClasslessUINavPet", "Pet", function()
-        if hasPetOut() then
-            selectExtra("pet")
-        end
-    end, 0.45, 0.3, 0.15)
-    ui.navPet:SetPoint("TOPLEFT", 0, y)
-    y = y - NAV_ROW_H
 
     local body = CreateFrame("Frame", "ClasslessUIBody", frame)
     body:SetPoint("TOPLEFT", 8, -8)
