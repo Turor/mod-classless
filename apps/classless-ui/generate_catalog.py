@@ -116,6 +116,16 @@ def main():
             }
         )
 
+    ATTR0_PASSIVE = 0x00000040
+    spell_passive = {}
+    spell_sql = DMLS / "Spell.sql"
+    if spell_sql.exists():
+        spell_text = spell_sql.read_text(encoding="utf-8", errors="replace")
+        for m in re.finditer(
+            r"\((\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)", spell_text
+        ):
+            spell_passive[int(m.group(1))] = (int(m.group(5)) & ATTR0_PASSIVE) != 0
+
     trainer_by_class = load_trainer_spells(Path(__file__).resolve().parent / "class_trainer_spells.txt")
     trainer_all = set()
     for s in trainer_by_class.values():
@@ -134,7 +144,10 @@ def main():
         if not mapped:
             continue
         class_id, spec_id = mapped
-        if spell not in trainer_by_class.get(class_id, ()):
+        acq = int(row[9]) if len(row) > 9 else 0
+        trained = spell in trainer_by_class.get(class_id, ())
+        starting = acq == 2 and not spell_passive.get(spell, False)
+        if not trained and not starting:
             continue
         if spell in placed[class_id]:
             continue
