@@ -311,12 +311,46 @@ local function nodeSpend(player, hasFn, n, pet)
     return highestKnownTalentRank(hasFn, n)
 end
 
-local function allPointsOn(hasFn, pet, player)
-    local spent = 0
+local MAX_TALENT_ROW = 15
+local POINTS_PER_ROW = 5
+
+local function buildRowHistogram(player, hasFn, pet)
+    local counts = {}
+    for r = 0, MAX_TALENT_ROW do
+        counts[r] = 0
+    end
     forEachTalentNode(pet, function(n)
-        spent = spent + nodeSpend(player, hasFn, n, pet)
+        local rank = nodeSpend(player, hasFn, n, pet)
+        local row = n.t or 0
+        if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
+            counts[row] = counts[row] + rank
+        end
     end)
-    return spent
+    return counts
+end
+
+local function prefixBelow(counts, row)
+    local sum = 0
+    for r = 0, row - 1 do
+        sum = sum + (counts[r] or 0)
+    end
+    return sum
+end
+
+local function rowUnlocked(counts, row)
+    if not row or row <= 0 then
+        return true
+    end
+    return prefixBelow(counts, row) >= (row * POINTS_PER_ROW)
+end
+
+local function histogramLegal(counts)
+    for r = 1, MAX_TALENT_ROW do
+        if (counts[r] or 0) > 0 and not rowUnlocked(counts, r) then
+            return false
+        end
+    end
+    return true
 end
 
 local function unlearnWouldOrphan(player, hasFn, node, pet)
@@ -324,24 +358,18 @@ local function unlearnWouldOrphan(player, hasFn, node, pet)
     if current < 1 then
         return true, UNLEARN_BLOCKED_MSG
     end
-    -- Row gate only. Points already sitting in later rows keep those rows
-    -- legal, so a filled tier 2 can let you strip tier 1.
-    local spentAfter = allPointsOn(hasFn, pet, player) - 1
-    local dangling = false
-    forEachTalentNode(pet, function(n)
-        if dangling then
-            return
+    local counts = buildRowHistogram(player, hasFn, pet)
+    local row = node.t or 0
+    if row >= 0 and row <= MAX_TALENT_ROW then
+        counts[row] = (counts[row] or 0) - 1
+        if counts[row] < 0 then
+            counts[row] = 0
         end
-        local r = nodeSpend(player, hasFn, n, pet)
-        if n.id == node.id then
-            r = r - 1
-        end
-        local row = n.t or 0
-        if r > 0 and row > 0 and spentAfter < (row * 5) then
-            dangling = true
-        end
-    end)
-    return dangling, UNLEARN_BLOCKED_MSG
+    end
+    if not histogramLegal(counts) then
+        return true, UNLEARN_BLOCKED_MSG
+    end
+    return false, UNLEARN_BLOCKED_MSG
 end
 
 local function canLearnSpell(player, spellId)
@@ -546,8 +574,9 @@ local function talentPrereqsOk(player, hasFn, node, rank)
     end
     local row = node.t or 0
     local pet = isPetTabId(node.tabId)
-    if row > 0 and allPointsOn(hasFn, pet, player) < (row * 5) then
-        return false, "Not enough talent points invested."
+    local counts = buildRowHistogram(player, hasFn, pet)
+    if not rowUnlocked(counts, row) then
+        return false, "Not enough talent points in earlier rows."
     end
     return true
 end

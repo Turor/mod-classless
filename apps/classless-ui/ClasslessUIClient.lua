@@ -521,17 +521,46 @@ local function forEachTalentNode(pet, fn)
     end
 end
 
-local function allTalentPointsSpent()
-    local spent = 0
-    forEachTalentNode(ui.selectedExtra == "pet", function(node)
-        spent = spent + talentRank(node)
+local MAX_TALENT_ROW = 15
+local POINTS_PER_ROW = 5
+
+local function buildRowHistogram(pet)
+    local counts = {}
+    for r = 0, MAX_TALENT_ROW do
+        counts[r] = 0
+    end
+    forEachTalentNode(pet, function(n)
+        local rank = talentRank(n)
+        local row = n.t or 0
+        if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
+            counts[row] = counts[row] + rank
+        end
     end)
-    return spent
+    return counts
 end
 
-local function talentRowMet(node, spent)
-    local row = node.t or 0
-    return row <= 0 or spent >= (row * 5)
+local function prefixBelow(counts, row)
+    local sum = 0
+    for r = 0, row - 1 do
+        sum = sum + (counts[r] or 0)
+    end
+    return sum
+end
+
+local function rowUnlocked(counts, row)
+    if not row or row <= 0 then
+        return true
+    end
+    return prefixBelow(counts, row) >= (row * POINTS_PER_ROW)
+end
+
+local function histogramLegal(counts)
+    for r = 1, MAX_TALENT_ROW do
+        if (counts[r] or 0) > 0 and not rowUnlocked(counts, r) then
+            return false
+        end
+    end
+    return true
 end
 
 local function talentChainMet(node, rankOf)
@@ -558,7 +587,8 @@ local function talentIsLearnable(node)
     if points < 1 then
         return false
     end
-    if not talentRowMet(node, allTalentPointsSpent()) then
+    local counts = buildRowHistogram(ui.selectedExtra == "pet")
+    if not rowUnlocked(counts, node.t or 0) then
         return false
     end
     return talentChainMet(node, talentRank)
@@ -568,24 +598,16 @@ local function canUnlearnTalent(node)
     if not node or talentRank(node) < 1 then
         return false, UNLEARN_BLOCKED_MSG
     end
-    -- Only the row gate: points already in later rows count. Arrow chains
-    -- do not pin lower-tier talents once those later ranks exist.
     local pet = ui.selectedExtra == "pet"
-    local spentAfter = allTalentPointsSpent() - 1
-    local dangling = false
-    forEachTalentNode(pet, function(n)
-        if dangling then
-            return
+    local counts = buildRowHistogram(pet)
+    local row = node.t or 0
+    if row >= 0 and row <= MAX_TALENT_ROW then
+        counts[row] = (counts[row] or 0) - 1
+        if counts[row] < 0 then
+            counts[row] = 0
         end
-        local r = talentRank(n)
-        if n.id == node.id then
-            r = r - 1
-        end
-        if r > 0 and not talentRowMet(n, spentAfter) then
-            dangling = true
-        end
-    end)
-    if dangling then
+    end
+    if not histogramLegal(counts) then
         return false, UNLEARN_BLOCKED_MSG
     end
     return true
