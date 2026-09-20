@@ -389,6 +389,56 @@ local function reqLevel(spellId)
     return t[spellId] or t[tostring(spellId)]
 end
 
+local function spellMoneyCost(spellId)
+    if not spellId then
+        return 0
+    end
+    local t = ui.state.costs
+    if not t then
+        return 0
+    end
+    return tonumber(t[spellId] or t[tostring(spellId)]) or 0
+end
+
+local function spellAltCost(spellId)
+    if not spellId then
+        return nil
+    end
+    local t = ui.state.altCosts
+    if not t then
+        return nil
+    end
+    return t[spellId] or t[tostring(spellId)]
+end
+
+local function addTrainCostToTooltip(spellId)
+    local copper = spellMoneyCost(spellId)
+    if copper > 0 then
+        local line = (GetCoinTextureString and GetCoinTextureString(copper)) or (copper .. "c")
+        local have = (GetMoney and GetMoney()) or 0
+        if have < copper then
+            GameTooltip:AddLine(line, 1, 0.1, 0.1)
+        else
+            GameTooltip:AddLine(line, 1, 0.82, 0)
+        end
+    end
+    local alt = spellAltCost(spellId)
+    if type(alt) == "table" then
+        local itemId = tonumber(alt.id)
+        local n = tonumber(alt.n)
+        if itemId and n and n > 0 then
+            local name = GetItemInfo and GetItemInfo(itemId)
+            local have = (GetItemCount and GetItemCount(itemId)) or 0
+            local line = string.format("%dx %s", n, name or ("item:" .. itemId))
+            if have < n then
+                GameTooltip:AddLine(line, 1, 0.1, 0.1)
+            else
+                GameTooltip:AddLine(line, 1, 0.82, 0)
+            end
+        end
+    end
+end
+
 local function talentRank(node)
     local learned = ui.state.learned
     if ui.selectedExtra == "pet" then
@@ -832,6 +882,7 @@ local function createSpellButton(index, parent)
         updatePlus()
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetHyperlink("spell:" .. id)
+        addTrainCostToTooltip(id)
         GameTooltip:Show()
     end)
     iconBtn:SetScript("OnLeave", function()
@@ -2221,6 +2272,10 @@ function Handlers.ShowUI(player)
     AIO.Handle("ClasslessUIServer", "RequestState")
 end
 
+function Handlers.LearnFailed(player, msg)
+    notifyUnlearnBlocked(tostring(msg or "Can't learn that."))
+end
+
 function Handlers.ApplyState(player, state)
     if type(state) == "table" then
         local learned = {}
@@ -2257,10 +2312,31 @@ function Handlers.ApplyState(player, state)
                 reqLevels[id] = tonumber(v)
             end
         end
+        local costs = {}
+        if type(state.costs) == "table" then
+            for k, v in pairs(state.costs) do
+                local id = tonumber(k) or k
+                costs[id] = tonumber(v) or 0
+            end
+        end
+        local altCosts = {}
+        if type(state.altCosts) == "table" then
+            for k, v in pairs(state.altCosts) do
+                local id = tonumber(k) or k
+                if type(v) == "table" then
+                    altCosts[id] = {
+                        id = tonumber(v.id),
+                        n = tonumber(v.n),
+                    }
+                end
+            end
+        end
         ui.state = {
             learned = learned,
             learnable = learnable,
             reqLevels = reqLevels,
+            costs = costs,
+            altCosts = altCosts,
             petLearned = petLearned,
             petOut = state.petOut and true or false,
             points = tonumber(state.points) or 0,
