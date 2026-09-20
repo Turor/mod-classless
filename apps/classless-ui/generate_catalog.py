@@ -131,38 +131,141 @@ def main():
     for s in trainer_by_class.values():
         trainer_all |= s
 
-    # Skill line -> spec, but only for spells a class trainer actually sells.
-    spells = defaultdict(lambda: defaultdict(list))
-    placed = defaultdict(set)
+    sla_by_spell = defaultdict(list)
     for row in sla_rows:
         if len(row) < 3:
             continue
-        skill, spell = row[1], row[2]
-        if spell <= 0 or spell in BLOCKED_SPELLS:
-            continue
-        mapped = SKILL_TO_SPEC.get(skill)
-        if not mapped:
-            continue
-        class_id, spec_id = mapped
+        skill, spell = int(row[1]), int(row[2])
         acq = int(row[9]) if len(row) > 9 else 0
-        trained = spell in trainer_by_class.get(class_id, ())
-        starting = acq == 2 and not spell_passive.get(spell, False)
-        if not trained and not starting:
+        sla_by_spell[spell].append((skill, acq))
+
+    def resolve_spec(class_id, spell):
+        class_specs = SPEC_SKILLS.get(class_id) or {}
+        named = None
+        for skill, _acq in sla_by_spell.get(spell, []):
+            mapped = SKILL_TO_SPEC.get(skill)
+            if not mapped:
+                continue
+            sla_class, sla_spec = mapped
+            if sla_class == class_id:
+                return sla_spec
+            if sla_spec in class_specs:
+                named = sla_spec
+        return named
+
+    spells = defaultdict(lambda: defaultdict(list))
+    placed = defaultdict(set)
+    general = []
+    general_seen = set()
+
+    for class_id, trained in trainer_by_class.items():
+        for spell in trained:
+            if spell in BLOCKED_SPELLS:
+                continue
+            spec_id = resolve_spec(class_id, spell)
+            if spec_id:
+                if spell not in placed[class_id]:
+                    spells[class_id][spec_id].append(spell)
+                    placed[class_id].add(spell)
+            elif spell not in general_seen:
+                general.append(spell)
+                general_seen.add(spell)
+
+    # Spell.dbc SpellFamilyName (spell_class_set) -> ChrClasses. Classless SLA
+    # dumps class_mask=-1, so family is what keeps Smite off paladin Holy.
+    FAMILY_TO_CLASS = {
+        3: 8, 4: 1, 5: 9, 6: 5, 7: 11, 8: 4, 9: 3, 10: 2, 11: 7, 15: 6,
+    }
+    start_ids = set()
+    for spell, entries in sla_by_spell.items():
+        if any(acq == 2 and not spell_passive.get(spell, False) for _sk, acq in entries):
+            start_ids.add(spell)
+
+    def parse_sql_fields(chunk):
+        fields = []
+        cur = []
+        in_s = False
+        i = 0
+        while i < len(chunk) and not (not in_s and chunk[i] == ")" and len(fields) >= 208):
+            ch = chunk[i]
+            if in_s:
+                if ch == "\\" and i + 1 < len(chunk):
+                    cur.append(chunk[i + 1])
+                    i += 2
+                    continue
+                if ch == "'":
+                    in_s = False
+                    i += 1
+                    continue
+                cur.append(ch)
+                i += 1
+                continue
+            if ch == "'":
+                in_s = True
+                i += 1
+                continue
+            if ch == ",":
+                fields.append("".join(cur).strip())
+                cur = []
+                i += 1
+                continue
+            cur.append(ch)
+            i += 1
+        if cur:
+            fields.append("".join(cur).strip())
+        return fields
+
+    spell_family = {}
+    if spell_sql.exists() and start_ids:
+        for m in re.finditer(r"\((\d+),", spell_text):
+            sid = int(m.group(1))
+            if sid not in start_ids:
+                continue
+            fields = parse_sql_fields(spell_text[m.end() :])
+            # id already consumed; field 0 in fields is category => spell_class_set is index 207
+            if len(fields) > 207:
+                try:
+                    spell_family[sid] = int(fields[207])
+                except ValueError:
+                    pass
+            if len(spell_family) >= len(start_ids):
+                break
+
+    for spell, entries in sla_by_spell.items():
+        if spell in BLOCKED_SPELLS:
+            continue
+        is_start = False
+        sla_class = None
+        sla_spec = None
+        for skill, acq in entries:
+            if acq == 2 and not spell_passive.get(spell, False):
+                is_start = True
+                mapped = SKILL_TO_SPEC.get(skill)
+                if mapped:
+                    sla_class, sla_spec = mapped
+        if not is_start:
+            continue
+        fam = spell_family.get(spell, 0)
+        class_id = FAMILY_TO_CLASS.get(fam) or sla_class
+        if not class_id:
             continue
         if spell in placed[class_id]:
             continue
-        placed[class_id].add(spell)
+        if any(spell in s for c, s in trainer_by_class.items() if c != class_id):
+            continue
+        spec_id = resolve_spec(class_id, spell) or sla_spec
+        if not spec_id:
+            if spell not in general_seen:
+                general.append(spell)
+                general_seen.add(spell)
+            continue
         spells[class_id][spec_id].append(spell)
-
-    for class_id, trained in trainer_by_class.items():
-        leftover = sorted(trained - placed[class_id] - BLOCKED_SPELLS)
-        for spell in leftover:
-            spells[class_id]["general"].append(spell)
-            placed[class_id].add(spell)
+        placed[class_id].add(spell)
 
     for class_id in spells:
         for spec_id in spells[class_id]:
             spells[class_id][spec_id].sort()
+    general.sort()
 
     lines = [
         "-- Generated by generate_catalog.py. Do not edit by hand.",
@@ -177,6 +280,7 @@ def main():
             lines.append(f"    {spec_id} = {lua_list(ids)},")
         lines.append("  },")
     lines.append("}")
+    lines.append(f"C.generalSpells = {lua_list(general)}")
     lines.append("C.talents = {")
     for tab in sorted(talents):
         lines.append(f"  [{tab}] = {{")
@@ -202,6 +306,17 @@ def main():
     lines.append("    end")
     lines.append("    C.spells[classId][specId] = kept")
     lines.append("  end")
+    lines.append("end")
+    lines.append("do")
+    lines.append("  local kept = {}")
+    lines.append("  for i = 1, #(C.generalSpells or {}) do")
+    lines.append("    local sid = C.generalSpells[i]")
+    lines.append("    if not (C.blockedSpells and C.blockedSpells[sid]) then")
+    lines.append("      kept[#kept + 1] = sid")
+    lines.append("      C.spellSet[sid] = true")
+    lines.append("    end")
+    lines.append("  end")
+    lines.append("  C.generalSpells = kept")
     lines.append("end")
     lines.append("C.talentById = {}")
     lines.append("for tabId, nodes in pairs(C.talents) do")

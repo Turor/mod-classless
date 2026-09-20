@@ -77,7 +77,6 @@ local function cls(id, name, icon, s1, s2, s3)
             s1,
             s2,
             s3,
-            spec("general", "General", "Interface\\Icons\\INV_Misc_Book_09", nil),
         },
     }
 end
