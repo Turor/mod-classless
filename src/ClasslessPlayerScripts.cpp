@@ -408,6 +408,7 @@ bool ClasslessPlayerScripts::OnPlayerUpdateDodgeUseAlternative(Player *player) {
         }
         player->SetRealDodge(m_realDodge);
         player->SetStatFloatValue(PLAYER_DODGE_PERCENTAGE, value);
+        return true;
     }
     return false;
 }
