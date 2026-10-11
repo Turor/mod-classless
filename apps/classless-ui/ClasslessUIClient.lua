@@ -694,6 +694,31 @@ local function groupSpellFamilies(ids)
         end
         end
     end
+    -- Talent ranks and talent-taught ranks (Mangle (Cat) rank 1 from the
+    -- Mangle talent) are not trainer spells, so they are not in the spec
+    -- list. Without them the family showed only the trainer rank 2 with a
+    -- red level and could not be dragged even though rank 1 is known.
+    local extra = ui.state and ui.state.extraRanks
+    if extra and not ui.selectedGeneral and not ui.selectedExtra then
+        for spellId, classId in pairs(extra) do
+            if classId == ui.selectedClassId then
+                local name = GetSpellInfo(spellId)
+                local fam = name and byName[name]
+                if fam then
+                    local present = false
+                    for i = 1, #fam.ids do
+                        if fam.ids[i] == spellId then
+                            present = true
+                            break
+                        end
+                    end
+                    if not present then
+                        fam.ids[#fam.ids + 1] = spellId
+                    end
+                end
+            end
+        end
+    end
     for _, fam in ipairs(families) do
         table.sort(fam.ids, function(a, b)
             local function rankKey(id)
@@ -866,10 +891,33 @@ local function refreshSpellCooldowns()
     poke(ui.rightSpellButtons)
 end
 
+local pickupKnownSpell
+
 local function pickupSpellId(spellId)
     if not spellId or not isKnown(spellId) then
         return
     end
+    pickupKnownSpell(spellId)
+    if cursorHasSpell() then
+        return
+    end
+    -- Talent "learn" spells (e.g. Mangle 33917) are hidden; pick up the
+    -- spell the talent taught (Mangle (Cat) / (Bear)) instead.
+    local taught = ui.state and ui.state.talentTeaches and ui.state.talentTeaches[spellId]
+    if type(taught) == "table" then
+        for i = 1, #taught do
+            local tid = taught[i]
+            if tid and isKnown(tid) then
+                pickupKnownSpell(tid)
+                if cursorHasSpell() then
+                    return
+                end
+            end
+        end
+    end
+end
+
+pickupKnownSpell = function(spellId)
     if ClearCursor then
         ClearCursor()
     end
@@ -2744,6 +2792,32 @@ function Handlers.ApplyState(player, state)
                 reqLevels[id] = tonumber(v)
             end
         end
+        local extraRanks = {}
+        if type(state.extraRanks) == "table" then
+            for k, v in pairs(state.extraRanks) do
+                local id = tonumber(k)
+                local cls = tonumber(v)
+                if id and cls then
+                    extraRanks[id] = cls
+                end
+            end
+        end
+        local talentTeaches = {}
+        if type(state.talentTeaches) == "table" then
+            for k, v in pairs(state.talentTeaches) do
+                local id = tonumber(k)
+                if id and type(v) == "table" then
+                    local list = {}
+                    for i = 1, #v do
+                        local t = tonumber(v[i])
+                        if t then
+                            list[#list + 1] = t
+                        end
+                    end
+                    talentTeaches[id] = list
+                end
+            end
+        end
         local costs = {}
         if type(state.costs) == "table" then
             for k, v in pairs(state.costs) do
@@ -2767,6 +2841,8 @@ function Handlers.ApplyState(player, state)
             learned = learned,
             learnable = learnable,
             reqLevels = reqLevels,
+            extraRanks = extraRanks,
+            talentTeaches = talentTeaches,
             costs = costs,
             altCosts = altCosts,
             petLearned = petLearned,

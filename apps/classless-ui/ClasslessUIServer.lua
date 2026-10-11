@@ -119,6 +119,13 @@ end
 local nameCache = {}
 local familiesByKey
 local spellGroup
+-- Talent ranks / talent-taught spells that share a name with trainer ranks
+-- in the same class ([spellId] = classId). The client adds them to the
+-- matching ClasslessUI spell family so e.g. Mangle (Cat) rank 1 from the
+-- Mangle talent shows (and can be dragged) instead of the level-58 rank 2.
+local extraRanks
+-- [talentRankSpellId] = { taught spell ids } for non-pet talents.
+local talentTeaches
 
 local function cachedSpellName(spellId)
     local cached = nameCache[spellId]
@@ -189,6 +196,8 @@ local function buildFamilies()
     end
     familiesByKey = {}
     spellGroup = {}
+    extraRanks = {}
+    talentTeaches = {}
     local seen = {}
     local function addId(id, group)
         if not id or not group then
@@ -239,16 +248,37 @@ local function buildFamilies()
                 for j = 1, #taught do
                     addId(taught[j], group)
                 end
+                if #taught > 0 and group ~= "pet" then
+                    talentTeaches[node.r[i]] = taught
+                end
             end
         end
     end
-    for _, list in pairs(familiesByKey) do
+    for key, list in pairs(familiesByKey) do
         table.sort(list, function(a, b)
             if a.level ~= b.level then
                 return a.level < b.level
             end
             return a.id < b.id
         end)
+        local classId = tonumber(string.match(key, "^class:(%d+)|"))
+        if classId then
+            local hasCatalog = false
+            for i = 1, #list do
+                if Catalog.spellSet and Catalog.spellSet[list[i].id] then
+                    hasCatalog = true
+                    break
+                end
+            end
+            if hasCatalog then
+                for i = 1, #list do
+                    local id = list[i].id
+                    if not (Catalog.spellSet and Catalog.spellSet[id]) then
+                        extraRanks[id] = classId
+                    end
+                end
+            end
+        end
     end
 end
 
@@ -308,6 +338,19 @@ end
 
 local function collectLearned(player)
     local learned = {}
+    buildFamilies()
+    for id in pairs(extraRanks or {}) do
+        if player:HasSpell(id) then
+            learned[id] = true
+        end
+    end
+    for _, taught in pairs(talentTeaches or {}) do
+        for i = 1, #taught do
+            if player:HasSpell(taught[i]) then
+                learned[taught[i]] = true
+            end
+        end
+    end
     if Catalog and Catalog.spellSet then
         for spellId in pairs(Catalog.spellSet) do
             if player:HasSpell(spellId) then
@@ -751,6 +794,8 @@ local function sendState(player)
         petAutocast = petAutoOn,
         points = points,
         petPoints = petPoints,
+        extraRanks = extraRanks or {},
+        talentTeaches = talentTeaches or {},
     })
 end
 
