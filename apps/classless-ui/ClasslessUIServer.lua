@@ -73,86 +73,6 @@ local function spellLevel(spellId)
     return level
 end
 
-local nameCache = {}
-local familiesByName
-
-local function cachedSpellName(spellId)
-    local cached = nameCache[spellId]
-    if cached ~= nil then
-        if cached == false then
-            return nil
-        end
-        return cached
-    end
-    local name = spellName(spellId)
-    nameCache[spellId] = name or false
-    return name
-end
-
-local function buildFamilies()
-    if familiesByName or not Catalog then
-        return
-    end
-    familiesByName = {}
-    local seen = {}
-    local function addId(id)
-        if not id or seen[id] then
-            return
-        end
-        seen[id] = true
-        local n = cachedSpellName(id)
-        if not n then
-            return
-        end
-        local list = familiesByName[n]
-        if not list then
-            list = {}
-            familiesByName[n] = list
-        end
-        list[#list + 1] = { id = id, level = spellLevel(id) }
-    end
-    if Catalog.spellSet then
-        for id in pairs(Catalog.spellSet) do
-            addId(id)
-        end
-    end
-    -- Talent ranks share names with later trainer ranks; they must sit in
-    -- the chain so rank 2 is not learnable until the talent taught rank 1.
-    if Catalog.talentById then
-        for _, node in pairs(Catalog.talentById) do
-            for i = 1, #node.r do
-                addId(node.r[i])
-            end
-        end
-    end
-    for _, list in pairs(familiesByName) do
-        table.sort(list, function(a, b)
-            if a.level ~= b.level then
-                return a.level < b.level
-            end
-            return a.id < b.id
-        end)
-    end
-end
-
-local function previousRankId(spellId)
-    buildFamilies()
-    local n = cachedSpellName(spellId)
-    local list = n and familiesByName and familiesByName[n]
-    if not list then
-        return nil
-    end
-    for i = 1, #list do
-        if list[i].id == spellId then
-            if i > 1 then
-                return list[i - 1].id
-            end
-            return nil
-        end
-    end
-    return nil
-end
-
 local function inSpellCatalog(spellId)
     return Catalog and Catalog.spellSet and Catalog.spellSet[spellId]
 end
@@ -194,6 +114,161 @@ local function isPetTabId(tabId)
         end
     end
     return tabId and petTabSet[tabId]
+end
+
+local nameCache = {}
+local familiesByKey
+local spellGroup
+
+local function cachedSpellName(spellId)
+    local cached = nameCache[spellId]
+    if cached ~= nil then
+        if cached == false then
+            return nil
+        end
+        return cached
+    end
+    local name = spellName(spellId)
+    nameCache[spellId] = name or false
+    return name
+end
+
+-- Owner of a talent tab: the class whose spec uses it, or "pet".
+local tabOwnerCache
+local function tabOwner(tabId)
+    if isPetTabId(tabId) then
+        return "pet"
+    end
+    if not tabOwnerCache then
+        tabOwnerCache = {}
+        for classId, info in pairs((Catalog and Catalog.classes) or {}) do
+            for _, sp in ipairs(info.specs or {}) do
+                if sp.tabId then
+                    tabOwnerCache[sp.tabId] = "class:" .. tostring(classId)
+                end
+            end
+        end
+    end
+    return tabOwnerCache[tabId] or ("tab:" .. tostring(tabId))
+end
+
+-- Spells a talent rank teaches with SPELL_EFFECT_LEARN_SPELL (36), e.g.
+-- the Mangle talent teaches Mangle (Cat) / Mangle (Bear) rank 1.
+local SPELL_EFFECT_LEARN_SPELL = 36
+local function taughtSpells(spellId)
+    local out = {}
+    if not LookupEntry then
+        return out
+    end
+    local entry = LookupEntry("Spell", spellId)
+    if not entry or not entry.GetEffect or not entry.GetEffectTriggerSpell then
+        return out
+    end
+    local effects = entry:GetEffect()
+    local triggers = entry:GetEffectTriggerSpell()
+    if type(effects) ~= "table" or type(triggers) ~= "table" then
+        return out
+    end
+    for i = 1, #effects do
+        local t = tonumber(triggers[i])
+        if tonumber(effects[i]) == SPELL_EFFECT_LEARN_SPELL and t and t > 0 then
+            out[#out + 1] = t
+        end
+    end
+    return out
+end
+
+-- Rank chains are keyed by owner + name. Keying by name alone mixed
+-- unrelated spells into one chain: druid Claw/Rake/Prowl/Cower/Dash and
+-- warrior Charge/Pummel/Cleave chained onto hunter pet spells or pet
+-- talents, and druid Remove Curse / Track Humanoids onto mage/hunter
+-- spells, so the "previous rank" was a spell the player can never have.
+local function buildFamilies()
+    if familiesByKey or not Catalog then
+        return
+    end
+    familiesByKey = {}
+    spellGroup = {}
+    local seen = {}
+    local function addId(id, group)
+        if not id or not group then
+            return
+        end
+        if not spellGroup[id] then
+            spellGroup[id] = group
+        end
+        local seenKey = group .. "|" .. tostring(id)
+        if seen[seenKey] then
+            return
+        end
+        seen[seenKey] = true
+        local n = cachedSpellName(id)
+        if not n then
+            return
+        end
+        local key = group .. "|" .. n
+        local list = familiesByKey[key]
+        if not list then
+            list = {}
+            familiesByKey[key] = list
+        end
+        list[#list + 1] = { id = id, level = spellLevel(id) }
+    end
+    for classId, specs in pairs(Catalog.spells or {}) do
+        for _, ids in pairs(specs) do
+            for i = 1, #ids do
+                addId(ids[i], "class:" .. tostring(classId))
+            end
+        end
+    end
+    for _, id in ipairs(Catalog.generalSpells or {}) do
+        addId(id, "general")
+    end
+    for _, id in ipairs(Catalog.petSpells or {}) do
+        addId(id, "pet")
+    end
+    -- Talent ranks share names with later trainer ranks; they must sit in
+    -- the chain so rank 2 is not learnable until the talent taught rank 1.
+    -- Spells a talent teaches (Mangle (Cat) rank 1) sit there too.
+    if Catalog.talentById then
+        for _, node in pairs(Catalog.talentById) do
+            local group = tabOwner(node.tabId)
+            for i = 1, #node.r do
+                addId(node.r[i], group)
+                local taught = taughtSpells(node.r[i])
+                for j = 1, #taught do
+                    addId(taught[j], group)
+                end
+            end
+        end
+    end
+    for _, list in pairs(familiesByKey) do
+        table.sort(list, function(a, b)
+            if a.level ~= b.level then
+                return a.level < b.level
+            end
+            return a.id < b.id
+        end)
+    end
+end
+
+local function previousRankId(spellId)
+    buildFamilies()
+    local n = cachedSpellName(spellId)
+    local group = spellGroup and spellGroup[spellId]
+    local list = n and group and familiesByKey and familiesByKey[group .. "|" .. n]
+    if not list then
+        return nil
+    end
+    for i = 1, #list do
+        if list[i].id == spellId then
+            if i > 1 then
+                return list[i - 1].id
+            end
+            return nil
+        end
+    end
+    return nil
 end
 
 local function unitHasSpell(unit, spellId)
