@@ -21,6 +21,21 @@ local function pushEnabled(player)
     end
 end
 
+-- Gauntlet Hero filter (gauntlet-design.md section 10). Gauntlet's GauntletServer.lua defines
+-- GauntletHeroFilter(player); it returns nil for every non-Hero player and does not exist on realms
+-- without Gauntlet, so non-Hero characters and the Standard realm behave exactly as before.
+local function heroFilter(player)
+    local f = rawget(_G, "GauntletHeroFilter")
+    if type(f) ~= "function" or not player then
+        return nil
+    end
+    local ok, res = pcall(f, player)
+    if ok and type(res) == "table" then
+        return res
+    end
+    return nil
+end
+
 local function spellName(spellId)
     if not LookupEntry then
         return nil
@@ -558,6 +573,10 @@ local function canLearnSpell(player, spellId)
     if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
         return false
     end
+    local hf = heroFilter(player)
+    if hf and not (hf.spells and hf.spells[spellId]) then
+        return false
+    end
     local req = spellLevel(spellId)
     if req > 1 and player:GetLevel() < req then
         return false
@@ -781,6 +800,11 @@ local function sendState(player)
         end
     end
     local costs, altCosts = collectTrainCosts(player)
+    local hf = heroFilter(player)
+    local hero = nil
+    if hf then
+        hero = { configured = hf.configured and true or false, classes = hf.classes or {}, spells = hf.spells or {} }
+    end
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
         learnable = collectLearnable(player),
@@ -796,6 +820,7 @@ local function sendState(player)
         petPoints = petPoints,
         extraRanks = extraRanks or {},
         talentTeaches = talentTeaches or {},
+        hero = hero,
     })
 end
 
@@ -940,6 +965,11 @@ function Handlers.LearnTalent(player, talentId, rank)
             return
         end
         sendState(player)
+        return
+    end
+    local hf = heroFilter(player)
+    if hf and not (hf.tabs and hf.tabs[node.tabId]) then
+        player:SendBroadcastMessage("That talent tree is not in your Gauntlet draft.")
         return
     end
     local points = player:GetFreeTalentPoints() or 0

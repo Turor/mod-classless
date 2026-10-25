@@ -669,7 +669,19 @@ local function specSpellIds()
         return {}, spec
     end
     local byClass = Catalog.spells[ui.selectedClassId]
-    return (byClass and byClass[spec.id]) or {}, spec
+    local ids = (byClass and byClass[spec.id]) or {}
+    -- Gauntlet Hero: only the drafted spells (server sends ui.state.hero; nil for everyone else).
+    local hero = ui.state and ui.state.hero
+    if hero then
+        local kept = {}
+        for _, id in ipairs(ids) do
+            if hero.spells[id] then
+                kept[#kept + 1] = id
+            end
+        end
+        ids = kept
+    end
+    return ids, spec
 end
 
 local function groupSpellFamilies(ids)
@@ -1852,10 +1864,16 @@ local function layoutNav()
     end
     local order = Catalog and Catalog.classOrder or {}
     local idx = 3
+    local hero = ui.state and ui.state.hero
     for _, classId in ipairs(order) do
         local block = ui.navClassBlocks and ui.navClassBlocks[classId]
         local specBtns = ui.navSpecButtons[classId]
-        if block and specBtns then
+        -- Gauntlet Hero: hide classes outside the drafted pool (non-Hero: hero is nil, nothing hidden).
+        local hidden = hero and not hero.classes[classId]
+        if block and hidden then
+            block:Hide()
+        elseif block and specBtns then
+            block:Show()
             local blockH = barH * 3
             block:ClearAllPoints()
             block:SetSize(SIDEBAR_W, blockH)
@@ -1873,8 +1891,8 @@ local function layoutNav()
                 block.ClassIcon:ClearAllPoints()
                 block.ClassIcon:SetPoint("TOPRIGHT", 0, 0)
             end
+            idx = idx + 3
         end
-        idx = idx + 3
     end
 end
 
@@ -2757,6 +2775,7 @@ function Handlers.LearnFailed(player, msg)
 end
 
 function Handlers.ApplyState(player, state)
+    local hadHero = ui.state and ui.state.hero ~= nil
     if type(state) == "table" then
         local learned = {}
         if type(state.learned) == "table" then
@@ -2852,7 +2871,29 @@ function Handlers.ApplyState(player, state)
             petAutocast = type(state.petAutocast) == "table" and state.petAutocast or {},
             points = tonumber(state.points) or 0,
             petPoints = tonumber(state.petPoints) or 0,
+            hero = nil,
         }
+        -- Gauntlet Hero filter (only present for Hero characters on Gauntlet realms).
+        if type(state.hero) == "table" then
+            local hero = { configured = state.hero.configured and true or false, classes = {}, spells = {} }
+            for k, v in pairs(type(state.hero.classes) == "table" and state.hero.classes or {}) do
+                if v then
+                    hero.classes[tonumber(k) or k] = true
+                end
+            end
+            for k, v in pairs(type(state.hero.spells) == "table" and state.hero.spells or {}) do
+                if v then
+                    hero.spells[tonumber(k) or k] = true
+                end
+            end
+            ui.state.hero = hero
+            if not ui.selectedGeneral and not ui.selectedExtra and not hero.classes[ui.selectedClassId] then
+                ui.selectedGeneral = true
+            end
+        end
+        if hadHero or ui.state.hero then
+            layoutNav()
+        end
     end
     if ui.frame and ui.frame:IsShown() then
         refreshNav()
