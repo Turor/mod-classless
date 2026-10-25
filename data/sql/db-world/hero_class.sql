@@ -2,10 +2,10 @@
 -- Server side only: the client needs the matching patch-n DBCs (V023__HeroClass.sql + gen_hero.py --client-dbc).
 -- Idempotent: safe to re-run.
 
--- ChrClasses.dbc override row (server). DisplayPower 6 matches every other classless class on the server;
--- mod-classless OnPlayerHasActivePowerType() keeps mana/rage/energy/runic active for all classes.
+-- ChrClasses.dbc override row (server). DisplayPower 0 = POWER_MANA (gauntlet-design.md section 12);
+-- mod-classless OnPlayerHasActivePowerType() keeps rage/energy/runic/focus active for all classes.
 DELETE FROM `chrclasses_dbc` WHERE `ID` = 10;
-INSERT INTO `chrclasses_dbc` (`ID`,`Field01`,`DisplayPower`,`PetNameToken`,`Name_Lang_enUS`,`Name_Lang_Mask`,`Name_Female_Lang_enUS`,`Name_Female_Lang_Mask`,`Name_Male_Lang_enUS`,`Name_Male_Lang_Mask`,`Filename`,`SpellClassSet`,`Flags`,`CinematicSequenceID`,`Required_Expansion`) VALUES (10,0,6,0,'Hero',16712190,'Hero',16712190,'Hero',16712190,'HERO',0,58,0,0);
+INSERT INTO `chrclasses_dbc` (`ID`,`Field01`,`DisplayPower`,`PetNameToken`,`Name_Lang_enUS`,`Name_Lang_Mask`,`Name_Female_Lang_enUS`,`Name_Female_Lang_Mask`,`Name_Male_Lang_enUS`,`Name_Male_Lang_Mask`,`Filename`,`SpellClassSet`,`Flags`,`CinematicSequenceID`,`Required_Expansion`) VALUES (10,0,0,0,'Hero',16712190,'Hero',16712190,'Hero',16712190,'HERO',0,58,0,0);
 
 -- CharStartOutfit.dbc override rows (server gives these items at creation).
 DELETE FROM `charstartoutfit_dbc` WHERE `ClassID` = 10;

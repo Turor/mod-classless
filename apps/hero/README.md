@@ -45,13 +45,16 @@ Rejected alternatives:
   (`data/sql/db-world/update_player_class_stats.sql`); Hero follows that.
 - gt* rows and the core's slot-10 dodge/parry constants: mean of Paladin and Druid.
 
-## Power type (recommendation, pending Matthew)
+## Power type: `POWER_MANA` (0)
 
-Hero uses the **same power setup as every other classless class**: `OnPlayerHasActivePowerType()` returns true
-for all powers, so mana, rage, energy and runic power are all live, and the ChrClasses `DisplayPower` copies the
-Paladin row of the file it is added to (server/shipped client: 6; `dmls/required`: 127, see note).
-Alternatives: mana-only display (0) or rage (1). Either would make the Hero's primary bar differ from every other
-classless character without changing which pools work.
+Following gauntlet-design.md section 12, Hero's ChrClasses `DisplayPower` is **0 (mana)** in the server
+override row, the client DBC and V023. mod-classless `OnPlayerHasActivePowerType()` returns true for every power,
+so rage, energy, focus and runic power stay live for Hero, and the Classless resource bar draws them.
+
+- Rejected: 127 (`POWER_ALL`). It only means "any power" on auras; as a class power it is past `MAX_POWERS`.
+- Rejected: copying the other classless classes' 6 (runic power). That keeps Hero's primary bar the same as every
+  other classless character but makes mana a secondary pool, even though most cross-class spells cost mana.
+  If Matthew prefers uniformity, set `HERO_DISPLAY_POWER = 6` in `gen_hero.py` and regenerate.
 
 Note: the shipped (Dec 2025) client `ChrClasses.dbc` and the server DBC have `DisplayPower = 6` for every class,
 while `dmls/required/ChrClasses.sql` has 127. Pre-existing, not caused by Hero; worth reconciling before the next
