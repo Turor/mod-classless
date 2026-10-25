@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Turoran Hero Class
+## Notes: Registers the Hero class (ChrClasses ID 10, token HERO) in FrameXML class tables so class-coloured UI does not error.
+## Author: Turoran
+## DefaultState: enabled
+
+TuroranHeroClass.lua
