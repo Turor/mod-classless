@@ -494,13 +494,14 @@ local MAX_TALENT_ROW = 15
 local POINTS_PER_ROW = 5
 local PET_POINTS_PER_ROW = 3
 
-local function buildRowHistogram(player, hasFn, pet)
+-- tabId: count one tree only (Gauntlet Hero: classic per-tree rows); nil counts every tree as before.
+local function buildRowHistogram(player, hasFn, pet, tabId)
     local counts = {}
     for r = 0, MAX_TALENT_ROW do
         counts[r] = 0
     end
     forEachTalentNode(pet, function(n)
-        local rank = nodeSpend(player, hasFn, n, pet)
+        local rank = (tabId == nil or n.tabId == tabId) and nodeSpend(player, hasFn, n, pet) or 0
         local row = n.t or 0
         if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
             counts[row] = counts[row] + rank
@@ -541,12 +542,27 @@ local function histogramLegal(counts, pet)
     return true
 end
 
+-- Gauntlet Hero (heroFilter non-nil): classic trees. Rows unlock on points spent in the SAME tree,
+-- prerequisites must be maxed, and a point can't be removed if that strands a higher tier or a
+-- dependent talent. Every other player keeps the Classless all-trees rules unchanged.
+local function heroTrees(player, pet)
+    return not pet and heroFilter(player) ~= nil
+end
+
 local function unlearnWouldOrphan(player, hasFn, node, pet)
     local current = nodeSpend(player, hasFn, node, pet)
     if current < 1 then
         return true, UNLEARN_BLOCKED_MSG
     end
-    local counts = buildRowHistogram(player, hasFn, pet)
+    local hero = heroTrees(player, pet)
+    if hero then
+        for _, n in ipairs(Catalog.talents[node.tabId] or {}) do
+            if n.p == node.id and nodeSpend(player, hasFn, n, pet) > 0 then
+                return true, UNLEARN_BLOCKED_MSG
+            end
+        end
+    end
+    local counts = buildRowHistogram(player, hasFn, pet, hero and node.tabId or nil)
     local row = node.t or 0
     if row >= 0 and row <= MAX_TALENT_ROW then
         counts[row] = (counts[row] or 0) - 1
@@ -914,19 +930,31 @@ local function talentPrereqsOk(player, hasFn, node, rank)
     if rank > 1 and not hasFn(node.r[rank - 1]) then
         return false, "Learn the previous talent rank first."
     end
+    local pet = isPetTabId(node.tabId)
+    local hero = heroTrees(player, pet)
     if node.p and node.p > 0 then
         local dep = Catalog.talentById[node.p]
         local need = (node.pr or 0) + 1
-        if not dep or not dep.r[need] or not hasFn(dep.r[need]) then
-            return false, "Missing talent prerequisite."
+        if hero and dep then
+            need = #dep.r
+        end
+        local missing = not dep or not dep.r[need]
+        if not missing then
+            if hero then
+                missing = nodeSpend(player, hasFn, dep, pet) < need and not hasFn(dep.r[need])
+            else
+                missing = not hasFn(dep.r[need])
+            end
+        end
+        if missing then
+            return false, hero and "Prerequisite talent must be maxed." or "Missing talent prerequisite."
         end
     end
     local row = node.t or 0
-    local pet = isPetTabId(node.tabId)
-    local counts = buildRowHistogram(player, hasFn, pet)
+    local counts = buildRowHistogram(player, hasFn, pet, hero and node.tabId or nil)
     local unlocked = pet and petRowUnlocked(counts, row) or rowUnlocked(counts, row)
     if not unlocked then
-        return false, "Not enough talent points in earlier rows."
+        return false, hero and "Not enough points in earlier rows of this tree." or "Not enough talent points in earlier rows."
     end
     return true
 end

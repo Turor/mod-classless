@@ -526,13 +526,14 @@ end
 local MAX_TALENT_ROW = 15
 local POINTS_PER_ROW = 5
 
-local function buildRowHistogram(pet)
+-- tabId: count one tree only (Gauntlet Hero: classic per-tree rows); nil counts every tree as before.
+local function buildRowHistogram(pet, tabId)
     local counts = {}
     for r = 0, MAX_TALENT_ROW do
         counts[r] = 0
     end
     forEachTalentNode(pet, function(n)
-        local rank = talentRank(n)
+        local rank = (tabId == nil or n.tabId == tabId) and talentRank(n) or 0
         local row = n.t or 0
         if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
             counts[row] = counts[row] + rank
@@ -587,12 +588,21 @@ local function unspentPetTalentPoints()
     return ui.state.petPoints or 0
 end
 
-local function talentChainMet(node, rankOf)
+-- Gauntlet Hero (ui.state.hero set, player talents only): classic trees. Rows unlock on points in the
+-- same tree and prerequisites must be maxed; everyone else keeps the Classless rules.
+local function heroTrees(pet)
+    return not pet and ui.state and ui.state.hero ~= nil
+end
+
+local function talentChainMet(node, rankOf, maxed)
     if not node.p or node.p <= 0 then
         return true
     end
     local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
     local need = (node.pr or 0) + 1
+    if maxed and dep then
+        need = #dep.r
+    end
     return dep and rankOf(dep) >= need
 end
 
@@ -612,7 +622,8 @@ local function talentIsLearnable(node)
         return false
     end
     local pet = ui.selectedExtra == "pet"
-    local counts = buildRowHistogram(pet)
+    local hero = heroTrees(pet)
+    local counts = buildRowHistogram(pet, hero and node.tabId or nil)
     if pet then
         if not petRowUnlocked(counts, node.t or 0) then
             return false
@@ -620,7 +631,7 @@ local function talentIsLearnable(node)
     elseif not rowUnlocked(counts, node.t or 0) then
         return false
     end
-    return talentChainMet(node, talentRank)
+    return talentChainMet(node, talentRank, hero)
 end
 
 local function canUnlearnTalent(node)
@@ -628,7 +639,16 @@ local function canUnlearnTalent(node)
         return false, UNLEARN_BLOCKED_MSG
     end
     local pet = ui.selectedExtra == "pet"
-    local counts = buildRowHistogram(pet)
+    local hero = heroTrees(pet)
+    if hero and Catalog and Catalog.talents then
+        -- a maxed prerequisite can't drop below max while a dependent talent has points
+        for _, n in ipairs(Catalog.talents[node.tabId] or {}) do
+            if n.p == node.id and talentRank(n) > 0 then
+                return false, UNLEARN_BLOCKED_MSG
+            end
+        end
+    end
+    local counts = buildRowHistogram(pet, hero and node.tabId or nil)
     local row = node.t or 0
     if row >= 0 and row <= MAX_TALENT_ROW then
         counts[row] = (counts[row] or 0) - 1
