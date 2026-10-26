@@ -2924,6 +2924,52 @@ function ToggleTalentFrame(...)
     end
 end
 
+-- /spellbook fallback: open the stock Blizzard spellbook even while
+-- ClasslessUI owns ToggleSpellBook. "/spellbook pet" opens the pet book.
+-- The stock toggle already closes the frame when that tab is showing.
+local function classlessSlashInUse(cmd)
+    cmd = string.lower(cmd)
+    for key in pairs(SlashCmdList) do
+        local i = 1
+        while true do
+            local s = _G["SLASH_" .. key .. i]
+            if not s then
+                break
+            end
+            if string.lower(s) == cmd then
+                return true
+            end
+            i = i + 1
+        end
+    end
+    return false
+end
+
+SlashCmdList["CLASSLESSSPELLBOOK"] = function(msg)
+    local arg = string.lower((msg or ""):match("^%s*(.-)%s*$") or "")
+    local orig = _G.ClasslessUI_OrigToggleSpellBook
+    if not orig then
+        print("Stock spellbook is unavailable.")
+        return
+    end
+    if arg == "pet" then
+        local hasSpells = HasPetSpells and HasPetSpells()
+        if not hasSpells or (PetHasSpellbook and not PetHasSpellbook()) then
+            print("You have no pet spellbook.")
+            return
+        end
+        orig(BOOKTYPE_PET)
+    elseif arg == "" or arg == "spell" or arg == "spells" then
+        orig(BOOKTYPE_SPELL)
+    else
+        print("Usage: /spellbook [pet]")
+    end
+end
+SLASH_CLASSLESSSPELLBOOK1 = "/spellbook"
+if not classlessSlashInUse("/sb") then
+    SLASH_CLASSLESSSPELLBOOK2 = "/sb"
+end
+
 _G.ClasslessUI_Toggle = toggleClasslessFrame
 _G.ClasslessUI_Show = function()
     Handlers.ShowUI()
