@@ -819,7 +819,8 @@ local function sendState(player)
     local hf = heroFilter(player)
     local hero = nil
     if hf then
-        hero = { configured = hf.configured and true or false, classes = hf.classes or {}, spells = hf.spells or {} }
+        hero = { configured = hf.configured and true or false, classes = hf.classes or {}, spells = hf.spells or {},
+            pet = hf.pet and true or false }
     end
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
@@ -982,6 +983,12 @@ function Handlers.LearnTalent(player, talentId, rank)
         return
     end
     if isPetTabId(node.tabId) then
+        -- Gauntlet Hero: pet talent trees come with the drafted "Pet" pick.
+        local phf = heroFilter(player)
+        if phf and phf.configured and not phf.pet then
+            player:SendBroadcastMessage("Pet talents come with the Pet pick in your Gauntlet draft.")
+            return
+        end
         if not player.ClasslessPetLearnTalent then
             player:SendBroadcastMessage("Pet talent learn is unavailable (server needs a rebuild).")
             return
