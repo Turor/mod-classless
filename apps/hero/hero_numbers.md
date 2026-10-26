@@ -16,7 +16,7 @@ BaseHP/BaseMana: same curves every classless class already uses (Warrior HP, Mag
 | 70 | 85 | 89 | 97 | 104 | 113 | 488 | 464.3 | 495 | 482 | 458 | 419 | 4444 | 2241 |
 | 80 | 101 | 104 | 116 | 123 | 135 | 579 | 548.4 | 587 | 571 | 541 | 493 | 8121 | 3268 |
 
-Combat/regen ratios (class-10 rows) = mean of Paladin and Druid:
+Combat/regen ratios (class-10 rows) = mean of Paladin and Druid, except gtregenmpperspt_dbc = 2.0 x the best mana class:
 
 | Table | L1 | L60 | L80 | Paladin L80 | Druid L80 |
 |---|---|---|---|---|---|
@@ -24,7 +24,7 @@ Combat/regen ratios (class-10 rows) = mean of Paladin and Druid:
 | gtchancetospellcrit_dbc | 0.001131 | 0.000175 | 0.000060 | 0.000060 | 0.000060 |
 | gtoctregenhp_dbc | 0.261840 | 0.201024 | 0.201024 | 0.263158 | 0.138889 |
 | gtregenhpperspt_dbc | 0.281250 | 0.093750 | 0.093750 | 0.125000 | 0.062500 |
-| gtregenmpperspt_dbc | 0.062937 | 0.006600 | 0.003345 | 0.003345 | 0.003345 |
+| gtregenmpperspt_dbc | 0.125874 | 0.013200 | 0.006690 | 0.003345 | 0.003345 |
 | gtchancetomeleecritbase_dbc | 0.05372 (flat) | | | | |
 | gtchancetospellcritbase_dbc | 0.02593 (flat) | | | | |
 

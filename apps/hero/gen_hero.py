@@ -28,6 +28,11 @@ CLASS_NAMES = {1: 'Warrior', 2: 'Paladin', 3: 'Hunter', 4: 'Rogue', 5: 'Priest',
                7: 'Shaman', 8: 'Mage', 9: 'Warlock', 11: 'Druid'}
 NON_DK = [1, 2, 3, 4, 5, 7, 8, 9, 11]
 HYBRID_REF = [2, 11]                      # Paladin + Druid: the hybrid budget / ratio reference
+# Mana regen: Hero's gtRegenMPPerSpt row = HERO_MP_REGEN_MULT x the highest mana-class coefficient at each level
+# (Matthew 2026-10-25: "in line with other high regen classes, then double it"). Classless already gives every
+# mana class the same per-spirit coefficient, so this is 2x Priest/Mage/Druid/Paladin at equal Int and Spirit.
+MANA_CLASSES = [2, 3, 5, 7, 8, 9, 11]
+HERO_MP_REGEN_MULT = 2.0
 PLAYABLE_RACES = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11]
 RACE_NAMES = {1: 'Human', 2: 'Orc', 3: 'Dwarf', 4: 'Night Elf', 5: 'Undead', 6: 'Tauren', 7: 'Gnome',
               8: 'Troll', 10: 'Blood Elf', 11: 'Draenei'}
@@ -77,7 +82,11 @@ def gt_values():
     res = {}
     for t in GT_PER_LEVEL:
         v = {int(a): float(b) for a, b in tsv(t + '.tsv')}
-        res[t] = {lvl: mean([v[(c - 1) * 100 + lvl - 1] for c in HYBRID_REF]) for lvl in range(1, 101)}
+        if t == 'gtregenmpperspt_dbc':
+            res[t] = {lvl: HERO_MP_REGEN_MULT * max(v[(c - 1) * 100 + lvl - 1] for c in MANA_CLASSES)
+                      for lvl in range(1, 101)}
+        else:
+            res[t] = {lvl: mean([v[(c - 1) * 100 + lvl - 1] for c in HYBRID_REF]) for lvl in range(1, 101)}
     for t in GT_BASE:
         v = {int(a): float(b) for a, b in tsv(t + '.tsv')}
         res[t] = mean([v[c - 1] for c in HYBRID_REF])
@@ -131,10 +140,15 @@ def hero_outfits(rows):
 
 
 # ---------------------------------------------------------------- DBC writer
+def fmt_fields(fmt):
+    """Number of DBC fields in a struct format: 'I4B24i' is 1 + 4 + 24 = 29, not len(fmt)."""
+    return sum(int(n or 1) for n, _ in re.findall(r'(\d*)([a-zA-Z?])', fmt))
+
+
 def write_dbc(path, fmt, rows, strings=b'\0'):
     rs = struct.calcsize('<' + fmt)
     with open(path, 'wb') as f:
-        f.write(b'WDBC' + struct.pack('<4I', len(rows), len(fmt), rs, len(strings)))
+        f.write(b'WDBC' + struct.pack('<4I', len(rows), fmt_fields(fmt), rs, len(strings)))
         for r in rows:
             f.write(struct.pack('<' + fmt, *r))
         f.write(strings)
@@ -259,7 +273,8 @@ def main():
     vals = [f"(10,{lvl},{hp},{mana},{s[0]},{s[1]},{s[2]},{s[3]},{s[4]})" for lvl, (hp, mana, s, _, _) in sorted(stats.items())]
     L.append('INSERT INTO `player_class_stats` (`Class`,`Level`,`BaseHP`,`BaseMana`,`Strength`,`Agility`,`Stamina`,`Intellect`,`Spirit`) VALUES\n' + ',\n'.join(vals) + ';')
     L.append('')
-    L.append('-- Combat/regen tables: class 10 rows = mean of Paladin and Druid (the stock rows for slot 10 are placeholders).')
+    L.append('-- Combat/regen tables: class 10 rows = mean of Paladin and Druid (the stock rows for slot 10 are placeholders),'
+             '\n-- except gtregenmpperspt_dbc = %.1f x the highest mana-class coefficient (Hero mana regen).' % HERO_MP_REGEN_MULT)
     for t in GT_PER_LEVEL:
         L.append(f'DELETE FROM `{t}` WHERE `ID` BETWEEN 900 AND 999;')
         L.append(f'INSERT INTO `{t}` (`ID`,`Data`) VALUES ' + ','.join(f'({900 + lvl - 1},{sqlv(gt[t][lvl])})' for lvl in range(1, 101)) + ';')
@@ -355,7 +370,7 @@ def main():
         hp, mana, s, tgt, avg = stats[lvl]
         D.append(f"| {lvl} | {' | '.join(map(str, s))} | {sum(s)} | {round(sum(avg), 1)} | "
                  f"{sum(rows[(2, lvl)][2:])} | {sum(rows[(11, lvl)][2:])} | {sum(rows[(1, lvl)][2:])} | {sum(rows[(8, lvl)][2:])} | {hp} | {mana} |")
-    D += ['', 'Combat/regen ratios (class-10 rows) = mean of Paladin and Druid:', '',
+    D += ['', 'Combat/regen ratios (class-10 rows) = mean of Paladin and Druid, except gtregenmpperspt_dbc = %.1f x the best mana class:' % HERO_MP_REGEN_MULT, '',
           '| Table | L1 | L60 | L80 | Paladin L80 | Druid L80 |', '|---|---|---|---|---|---|']
     for t in GT_PER_LEVEL:
         v = {int(x): float(y) for x, y in tsv(t + '.tsv')}
