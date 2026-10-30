@@ -1,0 +1,8 @@
+[Unit]
+Description=WoW daily worldserver restart (trigger) at 06:55:00 America/Chicago
+[Timer]
+OnCalendar=*-*-* 06:55:00 America/Chicago
+Persistent=false
+AccuracySec=1s
+[Install]
+WantedBy=timers.target
