@@ -314,7 +314,7 @@ def main():
             if spell not in general_seen:
                 general.append(spell)
                 general_seen.add(spell)
-    for extra in (6603, 2764, 3018, 5019, 360001, 360002, 360003):
+    for extra in (6603, 2764, 3018, 5019, 350011, 350012, 350013):
         if in_spellbook(extra) and extra not in general_seen:
             general.append(extra)
             general_seen.add(extra)
