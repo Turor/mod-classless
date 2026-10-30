@@ -212,7 +212,7 @@ The current SkillRaceClassInfo edits live in Flyway `V021__SkillRaceClassInfoUpd
 
 1. Convert extracted `DBFilesClient` to `wrath_dbcs.sqlite` (`wow_dbc_converter`).
 2. Inspect with the SELECTs in `SkillRaceClassInfoUpdateGuide.sql` / `UsefulQueries.md` until the masks and flags look right.
-3. Put **new** mutating SQL in `dmls/migrations/Vnnn__….sql` and run `./apply_patches.sh` (or `.ps1`). Do not re-edit an already-applied `V0xx` file; Flyway will checksum-fail. Add `V022` (or later) instead.
+3. Put **new** mutating SQL in `dmls/migrations/Vnnn__….sql` and run `./apply_patches.sh` (or `.ps1`). Do not re-edit an already-applied `V0xx` file; Flyway will checksum-fail. Add the next free `V0xx` instead (see `dmls/migrations/README.md`).
 4. Export the patched tables to INSERT dumps that `wow_custom_dbc` consumes. File stem **must** match the DBC table name:
 
    - `dmls/required/SkillLineAbility.sql`

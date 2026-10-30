@@ -21,6 +21,21 @@ local function pushEnabled(player)
     end
 end
 
+-- Gauntlet Hero filter (gauntlet-design.md section 10). Gauntlet's GauntletServer.lua defines
+-- GauntletHeroFilter(player); it returns nil for every non-Hero player and does not exist on realms
+-- without Gauntlet, so non-Hero characters and the Standard realm behave exactly as before.
+local function heroFilter(player)
+    local f = rawget(_G, "GauntletHeroFilter")
+    if type(f) ~= "function" or not player then
+        return nil
+    end
+    local ok, res = pcall(f, player)
+    if ok and type(res) == "table" then
+        return res
+    end
+    return nil
+end
+
 local function spellName(spellId)
     if not LookupEntry then
         return nil
@@ -479,13 +494,14 @@ local MAX_TALENT_ROW = 15
 local POINTS_PER_ROW = 5
 local PET_POINTS_PER_ROW = 3
 
-local function buildRowHistogram(player, hasFn, pet)
+-- tabId: count one tree only (Gauntlet Hero: classic per-tree rows); nil counts every tree as before.
+local function buildRowHistogram(player, hasFn, pet, tabId)
     local counts = {}
     for r = 0, MAX_TALENT_ROW do
         counts[r] = 0
     end
     forEachTalentNode(pet, function(n)
-        local rank = nodeSpend(player, hasFn, n, pet)
+        local rank = (tabId == nil or n.tabId == tabId) and nodeSpend(player, hasFn, n, pet) or 0
         local row = n.t or 0
         if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
             counts[row] = counts[row] + rank
@@ -526,12 +542,27 @@ local function histogramLegal(counts, pet)
     return true
 end
 
+-- Gauntlet Hero (heroFilter non-nil): classic trees. Rows unlock on points spent in the SAME tree,
+-- prerequisites must be maxed, and a point can't be removed if that strands a higher tier or a
+-- dependent talent. Every other player keeps the Classless all-trees rules unchanged.
+local function heroTrees(player, pet)
+    return not pet and heroFilter(player) ~= nil
+end
+
 local function unlearnWouldOrphan(player, hasFn, node, pet)
     local current = nodeSpend(player, hasFn, node, pet)
     if current < 1 then
         return true, UNLEARN_BLOCKED_MSG
     end
-    local counts = buildRowHistogram(player, hasFn, pet)
+    local hero = heroTrees(player, pet)
+    if hero then
+        for _, n in ipairs(Catalog.talents[node.tabId] or {}) do
+            if n.p == node.id and nodeSpend(player, hasFn, n, pet) > 0 then
+                return true, UNLEARN_BLOCKED_MSG
+            end
+        end
+    end
+    local counts = buildRowHistogram(player, hasFn, pet, hero and node.tabId or nil)
     local row = node.t or 0
     if row >= 0 and row <= MAX_TALENT_ROW then
         counts[row] = (counts[row] or 0) - 1
@@ -556,6 +587,10 @@ local function canLearnSpell(player, spellId)
         return false
     end
     if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
+        return false
+    end
+    local hf = heroFilter(player)
+    if hf and not (hf.spells and hf.spells[spellId]) then
         return false
     end
     local req = spellLevel(spellId)
@@ -781,6 +816,12 @@ local function sendState(player)
         end
     end
     local costs, altCosts = collectTrainCosts(player)
+    local hf = heroFilter(player)
+    local hero = nil
+    if hf then
+        hero = { configured = hf.configured and true or false, classes = hf.classes or {}, spells = hf.spells or {},
+            pet = hf.pet and true or false }
+    end
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
         learnable = collectLearnable(player),
@@ -796,6 +837,7 @@ local function sendState(player)
         petPoints = petPoints,
         extraRanks = extraRanks or {},
         talentTeaches = talentTeaches or {},
+        hero = hero,
     })
 end
 
@@ -889,19 +931,31 @@ local function talentPrereqsOk(player, hasFn, node, rank)
     if rank > 1 and not hasFn(node.r[rank - 1]) then
         return false, "Learn the previous talent rank first."
     end
+    local pet = isPetTabId(node.tabId)
+    local hero = heroTrees(player, pet)
     if node.p and node.p > 0 then
         local dep = Catalog.talentById[node.p]
         local need = (node.pr or 0) + 1
-        if not dep or not dep.r[need] or not hasFn(dep.r[need]) then
-            return false, "Missing talent prerequisite."
+        if hero and dep then
+            need = #dep.r
+        end
+        local missing = not dep or not dep.r[need]
+        if not missing then
+            if hero then
+                missing = nodeSpend(player, hasFn, dep, pet) < need and not hasFn(dep.r[need])
+            else
+                missing = not hasFn(dep.r[need])
+            end
+        end
+        if missing then
+            return false, hero and "Prerequisite talent must be maxed." or "Missing talent prerequisite."
         end
     end
     local row = node.t or 0
-    local pet = isPetTabId(node.tabId)
-    local counts = buildRowHistogram(player, hasFn, pet)
+    local counts = buildRowHistogram(player, hasFn, pet, hero and node.tabId or nil)
     local unlocked = pet and petRowUnlocked(counts, row) or rowUnlocked(counts, row)
     if not unlocked then
-        return false, "Not enough talent points in earlier rows."
+        return false, hero and "Not enough points in earlier rows of this tree." or "Not enough talent points in earlier rows."
     end
     return true
 end
@@ -929,6 +983,12 @@ function Handlers.LearnTalent(player, talentId, rank)
         return
     end
     if isPetTabId(node.tabId) then
+        -- Gauntlet Hero: pet talent trees come with the drafted "Pet" pick.
+        local phf = heroFilter(player)
+        if phf and phf.configured and not phf.pet then
+            player:SendBroadcastMessage("Pet talents come with the Pet pick in your Gauntlet draft.")
+            return
+        end
         if not player.ClasslessPetLearnTalent then
             player:SendBroadcastMessage("Pet talent learn is unavailable (server needs a rebuild).")
             return
@@ -940,6 +1000,11 @@ function Handlers.LearnTalent(player, talentId, rank)
             return
         end
         sendState(player)
+        return
+    end
+    local hf = heroFilter(player)
+    if hf and not (hf.tabs and hf.tabs[node.tabId]) then
+        player:SendBroadcastMessage("That talent tree is not in your Gauntlet draft.")
         return
     end
     local points = player:GetFreeTalentPoints() or 0

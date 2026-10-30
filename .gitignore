@@ -75,3 +75,6 @@ UIMods/patch-n/Interface/AddOns/ConsolePortKeyboard/
 UIMods/patch-n/Interface/AddOns/ConsolePortLoader/
 UIMods/patch-n/Interface/AddOns/ConsolePortUI_Loot/
 UIMods/patch-n/Interface/AddOns/ConsolePortUI_Menu/
+# Python bytecode
+__pycache__/
+*.pyc
