@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Turoran Chat Fix
+## Notes: Supplies the missing 3.3.5 CHAT_NOT_IN_LFG_NOTICE string so joining LookingForGroup does not error.
+## Author: Turoran
+## DefaultState: enabled
+
+TuroranChatFix.lua

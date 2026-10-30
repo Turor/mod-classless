@@ -1,0 +1,5 @@
+[Unit]
+Description=WoW daily worldserver restart (trigger)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wow-daily-restart.sh trigger

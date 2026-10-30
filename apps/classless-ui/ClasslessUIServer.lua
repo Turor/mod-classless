@@ -21,6 +21,21 @@ local function pushEnabled(player)
     end
 end
 
+-- Gauntlet Hero filter (gauntlet-design.md section 10). Gauntlet's GauntletServer.lua defines
+-- GauntletHeroFilter(player); it returns nil for every non-Hero player and does not exist on realms
+-- without Gauntlet, so non-Hero characters and the Standard realm behave exactly as before.
+local function heroFilter(player)
+    local f = rawget(_G, "GauntletHeroFilter")
+    if type(f) ~= "function" or not player then
+        return nil
+    end
+    local ok, res = pcall(f, player)
+    if ok and type(res) == "table" then
+        return res
+    end
+    return nil
+end
+
 local function spellName(spellId)
     if not LookupEntry then
         return nil
@@ -73,86 +88,6 @@ local function spellLevel(spellId)
     return level
 end
 
-local nameCache = {}
-local familiesByName
-
-local function cachedSpellName(spellId)
-    local cached = nameCache[spellId]
-    if cached ~= nil then
-        if cached == false then
-            return nil
-        end
-        return cached
-    end
-    local name = spellName(spellId)
-    nameCache[spellId] = name or false
-    return name
-end
-
-local function buildFamilies()
-    if familiesByName or not Catalog then
-        return
-    end
-    familiesByName = {}
-    local seen = {}
-    local function addId(id)
-        if not id or seen[id] then
-            return
-        end
-        seen[id] = true
-        local n = cachedSpellName(id)
-        if not n then
-            return
-        end
-        local list = familiesByName[n]
-        if not list then
-            list = {}
-            familiesByName[n] = list
-        end
-        list[#list + 1] = { id = id, level = spellLevel(id) }
-    end
-    if Catalog.spellSet then
-        for id in pairs(Catalog.spellSet) do
-            addId(id)
-        end
-    end
-    -- Talent ranks share names with later trainer ranks; they must sit in
-    -- the chain so rank 2 is not learnable until the talent taught rank 1.
-    if Catalog.talentById then
-        for _, node in pairs(Catalog.talentById) do
-            for i = 1, #node.r do
-                addId(node.r[i])
-            end
-        end
-    end
-    for _, list in pairs(familiesByName) do
-        table.sort(list, function(a, b)
-            if a.level ~= b.level then
-                return a.level < b.level
-            end
-            return a.id < b.id
-        end)
-    end
-end
-
-local function previousRankId(spellId)
-    buildFamilies()
-    local n = cachedSpellName(spellId)
-    local list = n and familiesByName and familiesByName[n]
-    if not list then
-        return nil
-    end
-    for i = 1, #list do
-        if list[i].id == spellId then
-            if i > 1 then
-                return list[i - 1].id
-            end
-            return nil
-        end
-    end
-    return nil
-end
-
 local function inSpellCatalog(spellId)
     return Catalog and Catalog.spellSet and Catalog.spellSet[spellId]
 end
@@ -196,6 +131,191 @@ local function isPetTabId(tabId)
     return tabId and petTabSet[tabId]
 end
 
+local nameCache = {}
+local familiesByKey
+local spellGroup
+-- Talent ranks / talent-taught spells that share a name with trainer ranks
+-- in the same class ([spellId] = classId). The client adds them to the
+-- matching ClasslessUI spell family so e.g. Mangle (Cat) rank 1 from the
+-- Mangle talent shows (and can be dragged) instead of the level-58 rank 2.
+local extraRanks
+-- [talentRankSpellId] = { taught spell ids } for non-pet talents.
+local talentTeaches
+
+local function cachedSpellName(spellId)
+    local cached = nameCache[spellId]
+    if cached ~= nil then
+        if cached == false then
+            return nil
+        end
+        return cached
+    end
+    local name = spellName(spellId)
+    nameCache[spellId] = name or false
+    return name
+end
+
+-- Owner of a talent tab: the class whose spec uses it, or "pet".
+local tabOwnerCache
+local function tabOwner(tabId)
+    if isPetTabId(tabId) then
+        return "pet"
+    end
+    if not tabOwnerCache then
+        tabOwnerCache = {}
+        for classId, info in pairs((Catalog and Catalog.classes) or {}) do
+            for _, sp in ipairs(info.specs or {}) do
+                if sp.tabId then
+                    tabOwnerCache[sp.tabId] = "class:" .. tostring(classId)
+                end
+            end
+        end
+    end
+    return tabOwnerCache[tabId] or ("tab:" .. tostring(tabId))
+end
+
+-- Spells a talent rank teaches with SPELL_EFFECT_LEARN_SPELL (36), e.g.
+-- the Mangle talent teaches Mangle (Cat) / Mangle (Bear) rank 1.
+local SPELL_EFFECT_LEARN_SPELL = 36
+local function taughtSpells(spellId)
+    local out = {}
+    if not LookupEntry then
+        return out
+    end
+    local entry = LookupEntry("Spell", spellId)
+    if not entry or not entry.GetEffect or not entry.GetEffectTriggerSpell then
+        return out
+    end
+    local effects = entry:GetEffect()
+    local triggers = entry:GetEffectTriggerSpell()
+    if type(effects) ~= "table" or type(triggers) ~= "table" then
+        return out
+    end
+    for i = 1, #effects do
+        local t = tonumber(triggers[i])
+        if tonumber(effects[i]) == SPELL_EFFECT_LEARN_SPELL and t and t > 0 then
+            out[#out + 1] = t
+        end
+    end
+    return out
+end
+
+-- Rank chains are keyed by owner + name. Keying by name alone mixed
+-- unrelated spells into one chain: druid Claw/Rake/Prowl/Cower/Dash and
+-- warrior Charge/Pummel/Cleave chained onto hunter pet spells or pet
+-- talents, and druid Remove Curse / Track Humanoids onto mage/hunter
+-- spells, so the "previous rank" was a spell the player can never have.
+local function buildFamilies()
+    if familiesByKey or not Catalog then
+        return
+    end
+    familiesByKey = {}
+    spellGroup = {}
+    extraRanks = {}
+    talentTeaches = {}
+    local seen = {}
+    local function addId(id, group)
+        if not id or not group then
+            return
+        end
+        if not spellGroup[id] then
+            spellGroup[id] = group
+        end
+        local seenKey = group .. "|" .. tostring(id)
+        if seen[seenKey] then
+            return
+        end
+        seen[seenKey] = true
+        local n = cachedSpellName(id)
+        if not n then
+            return
+        end
+        local key = group .. "|" .. n
+        local list = familiesByKey[key]
+        if not list then
+            list = {}
+            familiesByKey[key] = list
+        end
+        list[#list + 1] = { id = id, level = spellLevel(id) }
+    end
+    for classId, specs in pairs(Catalog.spells or {}) do
+        for _, ids in pairs(specs) do
+            for i = 1, #ids do
+                addId(ids[i], "class:" .. tostring(classId))
+            end
+        end
+    end
+    for _, id in ipairs(Catalog.generalSpells or {}) do
+        addId(id, "general")
+    end
+    for _, id in ipairs(Catalog.petSpells or {}) do
+        addId(id, "pet")
+    end
+    -- Talent ranks share names with later trainer ranks; they must sit in
+    -- the chain so rank 2 is not learnable until the talent taught rank 1.
+    -- Spells a talent teaches (Mangle (Cat) rank 1) sit there too.
+    if Catalog.talentById then
+        for _, node in pairs(Catalog.talentById) do
+            local group = tabOwner(node.tabId)
+            for i = 1, #node.r do
+                addId(node.r[i], group)
+                local taught = taughtSpells(node.r[i])
+                for j = 1, #taught do
+                    addId(taught[j], group)
+                end
+                if #taught > 0 and group ~= "pet" then
+                    talentTeaches[node.r[i]] = taught
+                end
+            end
+        end
+    end
+    for key, list in pairs(familiesByKey) do
+        table.sort(list, function(a, b)
+            if a.level ~= b.level then
+                return a.level < b.level
+            end
+            return a.id < b.id
+        end)
+        local classId = tonumber(string.match(key, "^class:(%d+)|"))
+        if classId then
+            local hasCatalog = false
+            for i = 1, #list do
+                if Catalog.spellSet and Catalog.spellSet[list[i].id] then
+                    hasCatalog = true
+                    break
+                end
+            end
+            if hasCatalog then
+                for i = 1, #list do
+                    local id = list[i].id
+                    if not (Catalog.spellSet and Catalog.spellSet[id]) then
+                        extraRanks[id] = classId
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function previousRankId(spellId)
+    buildFamilies()
+    local n = cachedSpellName(spellId)
+    local group = spellGroup and spellGroup[spellId]
+    local list = n and group and familiesByKey and familiesByKey[group .. "|" .. n]
+    if not list then
+        return nil
+    end
+    for i = 1, #list do
+        if list[i].id == spellId then
+            if i > 1 then
+                return list[i - 1].id
+            end
+            return nil
+        end
+    end
+    return nil
+end
+
 local function unitHasSpell(unit, spellId)
     return unit and unit.HasSpell and unit:HasSpell(spellId)
 end
@@ -233,6 +353,19 @@ end
 
 local function collectLearned(player)
     local learned = {}
+    buildFamilies()
+    for id in pairs(extraRanks or {}) do
+        if player:HasSpell(id) then
+            learned[id] = true
+        end
+    end
+    for _, taught in pairs(talentTeaches or {}) do
+        for i = 1, #taught do
+            if player:HasSpell(taught[i]) then
+                learned[taught[i]] = true
+            end
+        end
+    end
     if Catalog and Catalog.spellSet then
         for spellId in pairs(Catalog.spellSet) do
             if player:HasSpell(spellId) then
@@ -361,13 +494,14 @@ local MAX_TALENT_ROW = 15
 local POINTS_PER_ROW = 5
 local PET_POINTS_PER_ROW = 3
 
-local function buildRowHistogram(player, hasFn, pet)
+-- tabId: count one tree only (Gauntlet Hero: classic per-tree rows); nil counts every tree as before.
+local function buildRowHistogram(player, hasFn, pet, tabId)
     local counts = {}
     for r = 0, MAX_TALENT_ROW do
         counts[r] = 0
     end
     forEachTalentNode(pet, function(n)
-        local rank = nodeSpend(player, hasFn, n, pet)
+        local rank = (tabId == nil or n.tabId == tabId) and nodeSpend(player, hasFn, n, pet) or 0
         local row = n.t or 0
         if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
             counts[row] = counts[row] + rank
@@ -408,12 +542,27 @@ local function histogramLegal(counts, pet)
     return true
 end
 
+-- Gauntlet Hero (heroFilter non-nil): classic trees. Rows unlock on points spent in the SAME tree,
+-- prerequisites must be maxed, and a point can't be removed if that strands a higher tier or a
+-- dependent talent. Every other player keeps the Classless all-trees rules unchanged.
+local function heroTrees(player, pet)
+    return not pet and heroFilter(player) ~= nil
+end
+
 local function unlearnWouldOrphan(player, hasFn, node, pet)
     local current = nodeSpend(player, hasFn, node, pet)
     if current < 1 then
         return true, UNLEARN_BLOCKED_MSG
     end
-    local counts = buildRowHistogram(player, hasFn, pet)
+    local hero = heroTrees(player, pet)
+    if hero then
+        for _, n in ipairs(Catalog.talents[node.tabId] or {}) do
+            if n.p == node.id and nodeSpend(player, hasFn, n, pet) > 0 then
+                return true, UNLEARN_BLOCKED_MSG
+            end
+        end
+    end
+    local counts = buildRowHistogram(player, hasFn, pet, hero and node.tabId or nil)
     local row = node.t or 0
     if row >= 0 and row <= MAX_TALENT_ROW then
         counts[row] = (counts[row] or 0) - 1
@@ -438,6 +587,10 @@ local function canLearnSpell(player, spellId)
         return false
     end
     if player:HasSpell(spellId) or not inSpellCatalog(spellId) then
+        return false
+    end
+    local hf = heroFilter(player)
+    if hf and not (hf.spells and hf.spells[spellId]) then
         return false
     end
     local req = spellLevel(spellId)
@@ -663,6 +816,12 @@ local function sendState(player)
         end
     end
     local costs, altCosts = collectTrainCosts(player)
+    local hf = heroFilter(player)
+    local hero = nil
+    if hf then
+        hero = { configured = hf.configured and true or false, classes = hf.classes or {}, spells = hf.spells or {},
+            pet = hf.pet and true or false }
+    end
     AIO.Handle(player, "ClasslessUIClient", "ApplyState", {
         learned = collectLearned(player),
         learnable = collectLearnable(player),
@@ -676,6 +835,9 @@ local function sendState(player)
         petAutocast = petAutoOn,
         points = points,
         petPoints = petPoints,
+        extraRanks = extraRanks or {},
+        talentTeaches = talentTeaches or {},
+        hero = hero,
     })
 end
 
@@ -769,19 +931,31 @@ local function talentPrereqsOk(player, hasFn, node, rank)
     if rank > 1 and not hasFn(node.r[rank - 1]) then
         return false, "Learn the previous talent rank first."
     end
+    local pet = isPetTabId(node.tabId)
+    local hero = heroTrees(player, pet)
     if node.p and node.p > 0 then
         local dep = Catalog.talentById[node.p]
         local need = (node.pr or 0) + 1
-        if not dep or not dep.r[need] or not hasFn(dep.r[need]) then
-            return false, "Missing talent prerequisite."
+        if hero and dep then
+            need = #dep.r
+        end
+        local missing = not dep or not dep.r[need]
+        if not missing then
+            if hero then
+                missing = nodeSpend(player, hasFn, dep, pet) < need and not hasFn(dep.r[need])
+            else
+                missing = not hasFn(dep.r[need])
+            end
+        end
+        if missing then
+            return false, hero and "Prerequisite talent must be maxed." or "Missing talent prerequisite."
         end
     end
     local row = node.t or 0
-    local pet = isPetTabId(node.tabId)
-    local counts = buildRowHistogram(player, hasFn, pet)
+    local counts = buildRowHistogram(player, hasFn, pet, hero and node.tabId or nil)
     local unlocked = pet and petRowUnlocked(counts, row) or rowUnlocked(counts, row)
     if not unlocked then
-        return false, "Not enough talent points in earlier rows."
+        return false, hero and "Not enough points in earlier rows of this tree." or "Not enough talent points in earlier rows."
     end
     return true
 end
@@ -809,6 +983,12 @@ function Handlers.LearnTalent(player, talentId, rank)
         return
     end
     if isPetTabId(node.tabId) then
+        -- Gauntlet Hero: pet talent trees come with the drafted "Pet" pick.
+        local phf = heroFilter(player)
+        if phf and phf.configured and not phf.pet then
+            player:SendBroadcastMessage("Pet talents come with the Pet pick in your Gauntlet draft.")
+            return
+        end
         if not player.ClasslessPetLearnTalent then
             player:SendBroadcastMessage("Pet talent learn is unavailable (server needs a rebuild).")
             return
@@ -820,6 +1000,11 @@ function Handlers.LearnTalent(player, talentId, rank)
             return
         end
         sendState(player)
+        return
+    end
+    local hf = heroFilter(player)
+    if hf and not (hf.tabs and hf.tabs[node.tabId]) then
+        player:SendBroadcastMessage("That talent tree is not in your Gauntlet draft.")
         return
     end
     local points = player:GetFreeTalentPoints() or 0

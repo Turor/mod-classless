@@ -526,13 +526,14 @@ end
 local MAX_TALENT_ROW = 15
 local POINTS_PER_ROW = 5
 
-local function buildRowHistogram(pet)
+-- tabId: count one tree only (Gauntlet Hero: classic per-tree rows); nil counts every tree as before.
+local function buildRowHistogram(pet, tabId)
     local counts = {}
     for r = 0, MAX_TALENT_ROW do
         counts[r] = 0
     end
     forEachTalentNode(pet, function(n)
-        local rank = talentRank(n)
+        local rank = (tabId == nil or n.tabId == tabId) and talentRank(n) or 0
         local row = n.t or 0
         if rank > 0 and row >= 0 and row <= MAX_TALENT_ROW then
             counts[row] = counts[row] + rank
@@ -587,12 +588,21 @@ local function unspentPetTalentPoints()
     return ui.state.petPoints or 0
 end
 
-local function talentChainMet(node, rankOf)
+-- Gauntlet Hero (ui.state.hero set, player talents only): classic trees. Rows unlock on points in the
+-- same tree and prerequisites must be maxed; everyone else keeps the Classless rules.
+local function heroTrees(pet)
+    return not pet and ui.state and ui.state.hero ~= nil
+end
+
+local function talentChainMet(node, rankOf, maxed)
     if not node.p or node.p <= 0 then
         return true
     end
     local dep = Catalog and Catalog.talentById and Catalog.talentById[node.p]
     local need = (node.pr or 0) + 1
+    if maxed and dep then
+        need = #dep.r
+    end
     return dep and rankOf(dep) >= need
 end
 
@@ -612,7 +622,8 @@ local function talentIsLearnable(node)
         return false
     end
     local pet = ui.selectedExtra == "pet"
-    local counts = buildRowHistogram(pet)
+    local hero = heroTrees(pet)
+    local counts = buildRowHistogram(pet, hero and node.tabId or nil)
     if pet then
         if not petRowUnlocked(counts, node.t or 0) then
             return false
@@ -620,7 +631,7 @@ local function talentIsLearnable(node)
     elseif not rowUnlocked(counts, node.t or 0) then
         return false
     end
-    return talentChainMet(node, talentRank)
+    return talentChainMet(node, talentRank, hero)
 end
 
 local function canUnlearnTalent(node)
@@ -628,7 +639,16 @@ local function canUnlearnTalent(node)
         return false, UNLEARN_BLOCKED_MSG
     end
     local pet = ui.selectedExtra == "pet"
-    local counts = buildRowHistogram(pet)
+    local hero = heroTrees(pet)
+    if hero and Catalog and Catalog.talents then
+        -- a maxed prerequisite can't drop below max while a dependent talent has points
+        for _, n in ipairs(Catalog.talents[node.tabId] or {}) do
+            if n.p == node.id and talentRank(n) > 0 then
+                return false, UNLEARN_BLOCKED_MSG
+            end
+        end
+    end
+    local counts = buildRowHistogram(pet, hero and node.tabId or nil)
     local row = node.t or 0
     if row >= 0 and row <= MAX_TALENT_ROW then
         counts[row] = (counts[row] or 0) - 1
@@ -669,7 +689,19 @@ local function specSpellIds()
         return {}, spec
     end
     local byClass = Catalog.spells[ui.selectedClassId]
-    return (byClass and byClass[spec.id]) or {}, spec
+    local ids = (byClass and byClass[spec.id]) or {}
+    -- Gauntlet Hero: only the drafted spells (server sends ui.state.hero; nil for everyone else).
+    local hero = ui.state and ui.state.hero
+    if hero then
+        local kept = {}
+        for _, id in ipairs(ids) do
+            if hero.spells[id] then
+                kept[#kept + 1] = id
+            end
+        end
+        ids = kept
+    end
+    return ids, spec
 end
 
 local function groupSpellFamilies(ids)
@@ -692,6 +724,31 @@ local function groupSpellFamilies(ids)
                 fam.icon = icon
             end
         end
+        end
+    end
+    -- Talent ranks and talent-taught ranks (Mangle (Cat) rank 1 from the
+    -- Mangle talent) are not trainer spells, so they are not in the spec
+    -- list. Without them the family showed only the trainer rank 2 with a
+    -- red level and could not be dragged even though rank 1 is known.
+    local extra = ui.state and ui.state.extraRanks
+    if extra and not ui.selectedGeneral and not ui.selectedExtra then
+        for spellId, classId in pairs(extra) do
+            if classId == ui.selectedClassId then
+                local name = GetSpellInfo(spellId)
+                local fam = name and byName[name]
+                if fam then
+                    local present = false
+                    for i = 1, #fam.ids do
+                        if fam.ids[i] == spellId then
+                            present = true
+                            break
+                        end
+                    end
+                    if not present then
+                        fam.ids[#fam.ids + 1] = spellId
+                    end
+                end
+            end
         end
     end
     for _, fam in ipairs(families) do
@@ -866,10 +923,33 @@ local function refreshSpellCooldowns()
     poke(ui.rightSpellButtons)
 end
 
+local pickupKnownSpell
+
 local function pickupSpellId(spellId)
     if not spellId or not isKnown(spellId) then
         return
     end
+    pickupKnownSpell(spellId)
+    if cursorHasSpell() then
+        return
+    end
+    -- Talent "learn" spells (e.g. Mangle 33917) are hidden; pick up the
+    -- spell the talent taught (Mangle (Cat) / (Bear)) instead.
+    local taught = ui.state and ui.state.talentTeaches and ui.state.talentTeaches[spellId]
+    if type(taught) == "table" then
+        for i = 1, #taught do
+            local tid = taught[i]
+            if tid and isKnown(tid) then
+                pickupKnownSpell(tid)
+                if cursorHasSpell() then
+                    return
+                end
+            end
+        end
+    end
+end
+
+pickupKnownSpell = function(spellId)
     if ClearCursor then
         ClearCursor()
     end
@@ -1804,10 +1884,16 @@ local function layoutNav()
     end
     local order = Catalog and Catalog.classOrder or {}
     local idx = 3
+    local hero = ui.state and ui.state.hero
     for _, classId in ipairs(order) do
         local block = ui.navClassBlocks and ui.navClassBlocks[classId]
         local specBtns = ui.navSpecButtons[classId]
-        if block and specBtns then
+        -- Gauntlet Hero: hide classes outside the drafted pool (non-Hero: hero is nil, nothing hidden).
+        local hidden = hero and not hero.classes[classId]
+        if block and hidden then
+            block:Hide()
+        elseif block and specBtns then
+            block:Show()
             local blockH = barH * 3
             block:ClearAllPoints()
             block:SetSize(SIDEBAR_W, blockH)
@@ -1825,8 +1911,8 @@ local function layoutNav()
                 block.ClassIcon:ClearAllPoints()
                 block.ClassIcon:SetPoint("TOPRIGHT", 0, 0)
             end
+            idx = idx + 3
         end
-        idx = idx + 3
     end
 end
 
@@ -2709,6 +2795,7 @@ function Handlers.LearnFailed(player, msg)
 end
 
 function Handlers.ApplyState(player, state)
+    local hadHero = ui.state and ui.state.hero ~= nil
     if type(state) == "table" then
         local learned = {}
         if type(state.learned) == "table" then
@@ -2744,6 +2831,32 @@ function Handlers.ApplyState(player, state)
                 reqLevels[id] = tonumber(v)
             end
         end
+        local extraRanks = {}
+        if type(state.extraRanks) == "table" then
+            for k, v in pairs(state.extraRanks) do
+                local id = tonumber(k)
+                local cls = tonumber(v)
+                if id and cls then
+                    extraRanks[id] = cls
+                end
+            end
+        end
+        local talentTeaches = {}
+        if type(state.talentTeaches) == "table" then
+            for k, v in pairs(state.talentTeaches) do
+                local id = tonumber(k)
+                if id and type(v) == "table" then
+                    local list = {}
+                    for i = 1, #v do
+                        local t = tonumber(v[i])
+                        if t then
+                            list[#list + 1] = t
+                        end
+                    end
+                    talentTeaches[id] = list
+                end
+            end
+        end
         local costs = {}
         if type(state.costs) == "table" then
             for k, v in pairs(state.costs) do
@@ -2767,6 +2880,8 @@ function Handlers.ApplyState(player, state)
             learned = learned,
             learnable = learnable,
             reqLevels = reqLevels,
+            extraRanks = extraRanks,
+            talentTeaches = talentTeaches,
             costs = costs,
             altCosts = altCosts,
             petLearned = petLearned,
@@ -2776,7 +2891,29 @@ function Handlers.ApplyState(player, state)
             petAutocast = type(state.petAutocast) == "table" and state.petAutocast or {},
             points = tonumber(state.points) or 0,
             petPoints = tonumber(state.petPoints) or 0,
+            hero = nil,
         }
+        -- Gauntlet Hero filter (only present for Hero characters on Gauntlet realms).
+        if type(state.hero) == "table" then
+            local hero = { configured = state.hero.configured and true or false, classes = {}, spells = {} }
+            for k, v in pairs(type(state.hero.classes) == "table" and state.hero.classes or {}) do
+                if v then
+                    hero.classes[tonumber(k) or k] = true
+                end
+            end
+            for k, v in pairs(type(state.hero.spells) == "table" and state.hero.spells or {}) do
+                if v then
+                    hero.spells[tonumber(k) or k] = true
+                end
+            end
+            ui.state.hero = hero
+            if not ui.selectedGeneral and not ui.selectedExtra and not hero.classes[ui.selectedClassId] then
+                ui.selectedGeneral = true
+            end
+        end
+        if hadHero or ui.state.hero then
+            layoutNav()
+        end
     end
     if ui.frame and ui.frame:IsShown() then
         refreshNav()
@@ -2846,6 +2983,52 @@ function ToggleTalentFrame(...)
     if orig then
         return orig(...)
     end
+end
+
+-- /spellbook fallback: open the stock Blizzard spellbook even while
+-- ClasslessUI owns ToggleSpellBook. "/spellbook pet" opens the pet book.
+-- The stock toggle already closes the frame when that tab is showing.
+local function classlessSlashInUse(cmd)
+    cmd = string.lower(cmd)
+    for key in pairs(SlashCmdList) do
+        local i = 1
+        while true do
+            local s = _G["SLASH_" .. key .. i]
+            if not s then
+                break
+            end
+            if string.lower(s) == cmd then
+                return true
+            end
+            i = i + 1
+        end
+    end
+    return false
+end
+
+SlashCmdList["CLASSLESSSPELLBOOK"] = function(msg)
+    local arg = string.lower((msg or ""):match("^%s*(.-)%s*$") or "")
+    local orig = _G.ClasslessUI_OrigToggleSpellBook
+    if not orig then
+        print("Stock spellbook is unavailable.")
+        return
+    end
+    if arg == "pet" then
+        local hasSpells = HasPetSpells and HasPetSpells()
+        if not hasSpells or (PetHasSpellbook and not PetHasSpellbook()) then
+            print("You have no pet spellbook.")
+            return
+        end
+        orig(BOOKTYPE_PET)
+    elseif arg == "" or arg == "spell" or arg == "spells" then
+        orig(BOOKTYPE_SPELL)
+    else
+        print("Usage: /spellbook [pet]")
+    end
+end
+SLASH_CLASSLESSSPELLBOOK1 = "/spellbook"
+if not classlessSlashInUse("/sb") then
+    SLASH_CLASSLESSSPELLBOOK2 = "/sb"
 end
 
 _G.ClasslessUI_Toggle = toggleClasslessFrame

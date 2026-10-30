@@ -1,0 +1,5 @@
+[Unit]
+Description=WoW daily worldserver restart (watchdog)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/wow-daily-restart.sh watchdog
