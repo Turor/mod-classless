@@ -1,0 +1,31 @@
+-- DailyRestart: graceful scheduled restart trigger (SOAP/RA are disabled).
+-- A systemd timer / cron writes "<seconds> <epoch>" (or "cancel <epoch>") to TRIGGER;
+-- this polls every 10 s, consumes the file and runs ".server restart <seconds>".
+-- The worldserver exits and the service manager (systemd) starts it again.
+local TRIGGER = "@TRIGGER@"
+local MAX_AGE = 900 -- ignore triggers older than 15 min (e.g. left over while the server was down)
+
+local function check()
+  local f = io.open(TRIGGER, "r")
+  if not f then return end
+  local s = f:read("*l") or ""
+  f:close()
+  os.remove(TRIGGER)
+  local a, b = s:match("^(%S+)%s+(%d+)")
+  local ts = tonumber(b or "")
+  if not ts or os.time() - ts > MAX_AGE then
+    print("[DailyRestart] ignoring stale/invalid trigger: " .. s)
+    return
+  end
+  if a == "cancel" then
+    RunCommand("server restart cancel")
+    print("[DailyRestart] restart cancelled")
+    return
+  end
+  local secs = tonumber(a) or 300
+  SendWorldMessage(("|cffff8000[Server]|r Daily maintenance restart in %d minutes. The server will be back about 2 minutes later."):format(math.floor(secs / 60)))
+  RunCommand("server restart " .. secs)
+  print("[DailyRestart] server restart " .. secs .. " issued")
+end
+
+CreateLuaEvent(check, 10000, 0)

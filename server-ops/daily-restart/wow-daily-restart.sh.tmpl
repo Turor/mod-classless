@@ -1,0 +1,27 @@
+#!/bin/bash
+# Daily worldserver restart helper. Modes:
+#   trigger  - ask the running worldserver (via DailyRestart.lua) for ".server restart 300"
+#   watchdog - if the service was not (re)started since 06:50 today, restart it now (SIGTERM = graceful save)
+TRIGGER="@TRIGGER@"
+UNIT="@UNIT@"
+log(){ logger -t wow-daily-restart "$*"; echo "$*"; }
+case "$1" in
+  trigger)
+    if systemctl is-active -q "$UNIT"; then
+      echo "300 $(date +%s)" > "$TRIGGER.tmp" && mv "$TRIGGER.tmp" "$TRIGGER"
+      log "trigger written for $UNIT (restart 300)"
+    else
+      log "$UNIT not active; no trigger written"
+    fi ;;
+  watchdog)
+    rm -f "$TRIGGER"
+    start=$(date -d "$(systemctl show "$UNIT" -p ExecMainStartTimestamp --value)" +%s 2>/dev/null || echo 0)
+    cutoff=$(TZ=America/Chicago date -d "today 06:50" +%s)
+    if [ "$start" -lt "$cutoff" ]; then
+      log "$UNIT not restarted since 06:50 CT (start=$start); forcing systemctl restart"
+      systemctl restart "$UNIT"
+    else
+      log "$UNIT restarted OK at $(date -d @$start)"
+    fi ;;
+  *) echo "usage: $0 trigger|watchdog"; exit 1 ;;
+esac
