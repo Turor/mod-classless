@@ -12,6 +12,8 @@ Restarts each worldserver at **07:00 America/Chicago** with a 5-minute in-game c
 | ~07:00 | worldserver | Exits after the countdown; systemd starts it again (`Restart=always` on Standard's `worldserver`, `Restart=on-failure` on `wow-roguelike-worldserver`, both restart after the restart exit). |
 | 07:10:00 | `wow-daily-restart-watchdog.timer` → `wow-daily-restart.sh watchdog` | Removes any leftover trigger. If the unit's `ExecMainStartTimestamp` is before 06:50 CT today, forces `systemctl restart` (SIGTERM = graceful save). |
 
+`Persistent=false`: a run missed while the VM was down is skipped, not fired late (no surprise mid-day restarts). The watchdog's 06:50 cutoff is hard-coded in `wow-daily-restart.sh.tmpl`; move it too if the trigger time changes.
+
 The timers use `OnCalendar=… America/Chicago`, so they follow CST/CDT whatever the guest's TZ is (.101 runs in UTC).
 
 ## Files
@@ -38,6 +40,7 @@ The Lua is picked up on the next worldserver start or `.reload ale`. Back up any
 systemctl list-timers 'wow-daily-restart-*'
 journalctl -t wow-daily-restart --since today
 /usr/local/sbin/wow-daily-restart.sh trigger                   # restart now with the 5-min countdown
-echo "cancel $(date +%s)" > "$TRIGGER"                         # cancel a pending countdown (within 10 s of a trigger)
+. realms/standard.env   # or roguelike.env, sets $TRIGGER
+echo "cancel $(date +%s)" > "$TRIGGER"                         # cancel a pending countdown
 ```
 The worldserver log shows `[DailyRestart] server restart 300 issued`.
