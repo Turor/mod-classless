@@ -24,6 +24,11 @@ HERO = 10
 # Primary power (ChrClasses DisplayPower): POWER_MANA, per gauntlet-design.md section 12. Other pools stay
 # live through mod-classless OnPlayerHasActivePowerType(); 127 (POWER_ALL) is not a valid class power.
 HERO_DISPLAY_POWER = 0
+# Client ChrClasses.dbc DisplayPower. Every other class ships 127 in patch-n (commit 02bcaf7, Dec 2025: "Classes
+# need to have display power of 127 so they can use all resources correctly"). With 0 the 3.3.5 client treats Hero
+# as a mana-only class and never regenerates runes it has spent (Roguelike, Matthew 2026-10-29 and 2026-10-31), so
+# the client DBC must match the other classes. The server override row keeps HERO_DISPLAY_POWER (mana primary).
+HERO_CLIENT_DISPLAY_POWER = 127
 CLASS_NAMES = {1: 'Warrior', 2: 'Paladin', 3: 'Hunter', 4: 'Rogue', 5: 'Priest', 6: 'Death Knight',
                7: 'Shaman', 8: 'Mage', 9: 'Warlock', 11: 'Druid'}
 NON_DK = [1, 2, 3, 4, 5, 7, 8, 9, 11]
@@ -196,7 +201,7 @@ def append_hero_chrclasses(base, out):
     for i in (4, 21, 38):          # name, name_female, name_male (enUS slot)
         hero[i] = name
     hero[55] = add('HERO')         # filename / class token
-    hero[2] = HERO_DISPLAY_POWER   # display_power: mana
+    hero[2] = HERO_CLIENT_DISPLAY_POWER   # display_power: 127 like every other client class (runes regen)
     hero[56] = 0                   # spell_class_set: none, Hero draws from every class
     hero[58] = 0                   # cinematic: race intro
     hero[59] = 0                   # expansion

@@ -47,6 +47,10 @@ Rejected alternatives:
 
 ## Power type: `POWER_MANA` (0)
 
+**Update 2026-10-31:** the *client* `ChrClasses.dbc` row is now **127** like every other class
+(`HERO_CLIENT_DISPLAY_POWER`, migration V026). With 0 the client never regenerated runes a Hero had spent, so
+drafted Death Knight abilities locked up after one use. The server override row below is unchanged (0 = mana).
+
 Following gauntlet-design.md section 12, Hero's ChrClasses `DisplayPower` is **0 (mana)** in the server
 override row, the client DBC and V023. mod-classless `OnPlayerHasActivePowerType()` returns true for every power,
 so rage, energy, focus and runic power stay live for Hero, and the Classless resource bar draws them.
