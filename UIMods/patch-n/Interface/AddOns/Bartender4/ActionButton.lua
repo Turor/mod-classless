@@ -94,7 +94,20 @@ function Bartender4.Button:Create(id, parent)
 		control:RunFor(self, self:GetAttribute("UpdateAutoAssist"))
 	]])
 
-	parent:WrapScript(button, "OnReceiveDrag", [[]], [[
+	-- Turoran 2026-11-01: place the cursor (spell/item/macro/action) through the secure PickupAny path.
+	-- The template's own OnReceiveDrag calls PlaceAction(self.action) with an addon-tainted self.action,
+	-- which the client blocks in combat; PickupAction from the restricted snippet works in combat
+	-- (same as LibActionButton / ConsolePortBar). Wrapped twice because the post body is skipped when the
+	-- pre body picks up; the outer wrap's phony message makes its post body (auto-assist refresh) run.
+	parent:WrapScript(button, "OnReceiveDrag", [[
+		local action = self:GetAttribute("action")
+		if action and kind then
+			return "action", action
+		end
+	]])
+	parent:WrapScript(button, "OnReceiveDrag", [[
+		return "message", "update"
+	]], [[
 		control:RunFor(self, self:GetAttribute("UpdateAutoAssist"))
 	]])
 
